@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"sync"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
@@ -28,6 +29,7 @@ import (
 
 	"volcano.sh/volcano/pkg/scheduler/api"
 	"volcano.sh/volcano/pkg/scheduler/api/devices"
+	"volcano.sh/volcano/pkg/scheduler/api/devices/ascend"
 	"volcano.sh/volcano/pkg/scheduler/api/devices/ascend/ascend310p/vnpu"
 	"volcano.sh/volcano/pkg/scheduler/api/devices/config"
 	"volcano.sh/volcano/pkg/scheduler/api/devices/nvidia/gpushare"
@@ -46,13 +48,18 @@ const (
 
 	VGPUEnable = "deviceshare.VGPUEnable"
 
-	ASCEND310PvGPU = "deviceshare.ASCEND310PVNPUEnable"
+	ASCEND310PvGPU = "deviceshare.ASCEND310PVGPUEnable"
+	AscendVNPUEnable = "deviceshare.AscendVNPUEnable"
 
 	SchedulePolicyArgument = "deviceshare.SchedulePolicy"
 	ScheduleWeight         = "deviceshare.ScheduleWeight"
 
 	KnownGeometriesCMName      = "deviceshare.KnownGeometriesCMName"
 	KnownGeometriesCMNamespace = "deviceshare.KnownGeometriesCMNamespace"
+)
+
+var (
+	once    sync.Once
 )
 
 type deviceSharePlugin struct {
@@ -74,6 +81,7 @@ func (dp *deviceSharePlugin) Name() string {
 }
 
 func enablePredicate(dsp *deviceSharePlugin) {
+	klog.Infof("enablePredicate")
 	// Checks whether predicate.GPUSharingEnable is provided or not, if given, modifies the value in predicateEnable struct.
 	nodeLockEnable := false
 	args := dsp.pluginArguments
@@ -82,6 +90,8 @@ func enablePredicate(dsp *deviceSharePlugin) {
 	args.GetBool(&nodeLockEnable, NodeLockEnable)
 	args.GetBool(&vgpu.VGPUEnable, VGPUEnable)
 	args.GetBool(&vnpu.Ascend310pvNPUEnable, ASCEND310PvGPU)
+	args.GetBool(&ascend.AscendVNPUEnable, AscendVNPUEnable)
+	klog.Infof("ascend.AscendVNPUEnable %t", ascend.AscendVNPUEnable)
 
 	gpushare.NodeLockEnable = nodeLockEnable
 	vgpu.NodeLockEnable = nodeLockEnable
@@ -96,14 +106,23 @@ func enablePredicate(dsp *deviceSharePlugin) {
 		klog.Fatal("gpu-share and vgpu can't be used together")
 	}
 
-	if !vgpu.VGPUEnable {
-		return
-	}
 	knownGeometriesCMName := "volcano-vgpu-device-config"
 	args.GetString(&knownGeometriesCMName, KnownGeometriesCMName)
 	knownGeometriesCMNamespace := "kube-system"
 	args.GetString(&knownGeometriesCMNamespace, KnownGeometriesCMNamespace)
 	config.InitDevicesConfig(knownGeometriesCMName, knownGeometriesCMNamespace)
+	registerDevices()
+}
+
+func registerDevices() {
+	once.Do(func() {
+		if ascend.AscendVNPUEnable {
+			for _, vnpu := range config.GetConfig().VNPUs {
+				klog.Infof("register device %s", vnpu.CommonWord)
+				api.RegisterDevice(vnpu.CommonWord)
+			}
+		}
+	})
 }
 
 func createStatus(code int, reason string) *api.Status {
@@ -172,11 +191,14 @@ func initializeDevicesWithSession(ssn *framework.Session) {
 func initializeDevice(device api.Devices, ssn *framework.Session, nodeInfo *api.NodeInfo) error {
 	switch d := device.(type) {
 	case *vnpu.NPUDevices:
-		klog.V(3).Infof("initialize ascend310p device.")
-		return vnpu310p.InitVNPUDevice(d, ssn, nodeInfo)
+		if vnpu.Ascend310pvNPUEnable {
+			klog.V(3).Infof("initialize ascend310p device.")
+			return vnpu310p.InitVNPUDevice(d, ssn, nodeInfo)
+		}
 	default:
 		return nil
 	}
+	return nil
 }
 
 func (dp *deviceSharePlugin) OnSessionOpen(ssn *framework.Session) {
@@ -185,13 +207,15 @@ func (dp *deviceSharePlugin) OnSessionOpen(ssn *framework.Session) {
 
 	// Register event handlers to update task info in PodLister & nodeMap
 	ssn.AddPredicateFn(dp.Name(), func(task *api.TaskInfo, node *api.NodeInfo) error {
+		klog.Infof("xxx enter PredicateFn")
+		defer klog.Infof("xxx leave PredicateFn")
 		predicateStatus := make([]*api.Status, 0)
 		// Check PredicateWithCache
 		for _, val := range api.RegisteredDevices {
 			if dev, ok := node.Others[val].(api.Devices); ok {
 				if reflect.ValueOf(dev).IsNil() {
 					// TODO When a pod requests a device of the current type, but the current node does not have such a device, an error is thrown
-					if dev == nil || dev.HasDeviceRequest(task.Pod) {
+					if dev == nil {
 						predicateStatus = append(predicateStatus, &api.Status{
 							Code:   devices.Unschedulable,
 							Reason: "node not initialized with device" + val,
@@ -202,8 +226,13 @@ func (dp *deviceSharePlugin) OnSessionOpen(ssn *framework.Session) {
 					klog.V(4).Infof("pod %s/%s did not request device %s on %s, skipping it", task.Pod.Namespace, task.Pod.Name, val, node.Name)
 					continue
 				}
+				if !dev.HasDeviceRequest(task.Pod) {
+					klog.V(4).Infof("pod %s/%s did not request device %s on %s, skipping it", task.Pod.Namespace, task.Pod.Name, val, node.Name)
+					continue
+				}
 				code, msg, err := dev.FilterNode(task.Pod, dp.schedulePolicy)
 				if err != nil {
+					klog.V(4).Infof("pod %s/%s fit failed. device %s node %s err %v", task.Pod.Namespace, task.Pod.Name, val, node.Name, err)
 					predicateStatus = append(predicateStatus, createStatus(code, msg))
 					return api.NewFitErrWithStatus(task, node, predicateStatus...)
 				}
@@ -224,7 +253,10 @@ func (dp *deviceSharePlugin) OnSessionOpen(ssn *framework.Session) {
 	})
 
 	ssn.AddNodeOrderFn(dp.Name(), func(task *api.TaskInfo, node *api.NodeInfo) (float64, error) {
+		klog.Infof("xxx enter NodeOrderFn")
+		defer klog.Infof("xxx leave NodeOrderFn")
 		// DeviceScore
+		klog.Infof("Node: %s, task<%s/%s> NodeOrderFn", node.Name, task.Namespace, task.Name)
 		nodeScore := float64(0)
 		if dp.scheduleWeight > 0 {
 			score, status := getDeviceScore(context.TODO(), task.Pod, node, dp.schedulePolicy)
@@ -237,6 +269,7 @@ func (dp *deviceSharePlugin) OnSessionOpen(ssn *framework.Session) {
 			nodeScore = float64(score) * float64(dp.scheduleWeight)
 			klog.V(5).Infof("Node: %s, task<%s/%s> Device Score weight %d, score: %f", node.Name, task.Namespace, task.Name, dp.scheduleWeight, nodeScore)
 		}
+		klog.Infof("Node: %s, task<%s/%s> NodeOrderFn end", node.Name, task.Namespace, task.Name)
 		return nodeScore, nil
 	})
 

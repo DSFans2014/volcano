@@ -32,7 +32,6 @@ package devices
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -116,8 +115,8 @@ const (
 
 var (
 	HandshakeAnnos = map[string]string{}
-	InRequestDevices   map[string]string
-	SupportDevices     map[string]string
+	InRequestDevices = map[string]string{}
+	SupportDevices = map[string]string{}
 )
 
 type ContainerDevices []ContainerDevice

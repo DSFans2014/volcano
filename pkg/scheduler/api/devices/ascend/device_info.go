@@ -59,6 +59,8 @@ const (
 	spreadPolicy      = "spread"
 	binpackMultiplier = 100
 	spreadMultiplier  = 100
+	CMName = "volcano-vgpu-device-config"
+	CMNamespace = "kube-system"
 )
 
 type AscendDevice struct {
@@ -85,7 +87,7 @@ type RuntimeInfo struct {
 }
 
 var (
-	enableAscend   bool
+	AscendVNPUEnable   bool
 	configFile     string
 	NodeLockEnable bool
 )
@@ -93,13 +95,20 @@ var (
 func NewAscendDevices(name string, node *v1.Node) map[string]*AscendDevices {
 	ascend_devices := make(map[string]*AscendDevices)
 	if node == nil {
+		klog.Warningf("Node is nil for node %s, returning empty AscendDevices", name)
 		return ascend_devices
 	}
+	cur_config := config.GetConfig()
+	if cur_config == nil {
+		klog.InfoS("cur config is null. call InitDevicesConfig")
+		config.InitDevicesConfig(CMName, CMNamespace)
+	}
 	devs := InitDevices(config.GetConfig().VNPUs)
+	klog.Infof("NewAscendDevices. dev len %d", len(devs))
 	for _, dev := range devs {
 		node_devices, err := dev.GetNodeDevices(*node)
 		if err != nil {
-			klog.V(5).InfoS("Failed to get node devices", "nodeName", node.Name, "deviceType", dev.CommonWord(), "error", err)
+			klog.Warningf("Failed to get node devices. nodeName %s, deviceType %s, error %s" , node.Name, dev.CommonWord(), err)
 			continue
 		}
 		as_devices := &AscendDevices{
@@ -144,6 +153,7 @@ func (ads *AscendDevices) SubResourceUsage(id string, cores int32, mem int32) er
 }
 
 func (ads *AscendDevices) AddResource(pod *v1.Pod) {
+	klog.Infof("AscendDevices AddResource")
 	if ads == nil {
 		return
 	}
@@ -192,6 +202,10 @@ func (ads *AscendDevices) AddQueueResource(pod *v1.Pod) map[string]float64 {
 }
 
 func (ads *AscendDevices) HasDeviceRequest(pod *v1.Pod) bool {
+	if !AscendVNPUEnable {
+		return false
+	}
+	klog.Infof("xxx %s check HasDeviceRequest", ads.Type)
 	rand_dev, err := ads.getRandomDevice()
 	if rand_dev == nil || err != nil {
 		return false
@@ -200,13 +214,16 @@ func (ads *AscendDevices) HasDeviceRequest(pod *v1.Pod) bool {
 	for _, container := range pod.Spec.Containers {
 		_, ok := container.Resources.Limits[v1.ResourceName(vnpu_config.ResourceName)]
 		if ok {
+			klog.Infof("xxx %s check HasDeviceRequest ok. %s", ads.Type, vnpu_config.ResourceName)
 			return true
 		}
 		_, ok = container.Resources.Limits[v1.ResourceName(vnpu_config.ResourceMemoryName)]
 		if ok {
+			klog.Infof("xxx %s check HasDeviceRequest ok. %s", ads.Type, vnpu_config.ResourceMemoryName)
 			return true
 		}
 	}
+	klog.Infof("xxx %s check HasDeviceRequest false", ads.Type)
 	return false
 }
 
@@ -290,7 +307,7 @@ func (ads *AscendDevices) Allocate(kubeClient kubernetes.Interface, pod *v1.Pod)
 	if NodeLockEnable {
 		nodelock.ReleaseNodeLock(ads.NodeName, ads.Type)
 	}
-	klog.V(3).Infoln("DeviceSharing:Allocate Success")
+	klog.V(3).Infoln("Allocate Success")
 	return nil
 }
 
@@ -299,7 +316,13 @@ func (ads *AscendDevices) Release(kubeClient kubernetes.Interface, pod *v1.Pod) 
 }
 
 func (ads *AscendDevices) GetIgnoredDevices() []string {
-	return []string{""}
+	rand_dev, err := ads.getRandomDevice()
+	if rand_dev == nil || err != nil {
+		return []string{""}
+	}
+	vnpu_config := rand_dev.config
+	klog.Infof("IgnoredDevices %s", vnpu_config.ResourceMemoryName)
+	return []string{vnpu_config.ResourceMemoryName}
 }
 
 func (ads *AscendDevices) GetStatus() string {
@@ -491,10 +514,7 @@ func (dev *AscendDevice) trimMemory(m int64) (int64, string) {
 }
 
 func InitDevices(config []config.VNPUConfig) []*AscendDevice {
-	var devs []*AscendDevice
-	if !enableAscend {
-		return devs
-	}
+	devs := make([]*AscendDevice, 0)
 	for _, vnpu := range config {
 		commonWord := vnpu.CommonWord
 		dev := &AscendDevice{
@@ -520,7 +540,7 @@ func InitDevices(config []config.VNPUConfig) []*AscendDevice {
 }
 
 func ParseConfig(fs *flag.FlagSet) {
-	fs.BoolVar(&enableAscend, "enable-ascend", false, "enable ascend device")
+	fs.BoolVar(&AscendVNPUEnable, "AscendVNPUEnable", false, "enable ascend device")
 }
 
 func (dev *AscendDevice) CommonWord() string {
