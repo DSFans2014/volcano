@@ -284,7 +284,7 @@ func (ads *AscendDevices) ScoreNode(pod *v1.Pod, policy string) float64 {
 }
 
 func (ads *AscendDevices) Allocate(kubeClient kubernetes.Interface, pod *v1.Pod) error {
-	klog.V(4).Infoln("hami-vnpu DeviceSharing: Into AllocateToPod", pod.Name)
+	klog.V(4).Infof("Allocate device %s to Pod %s", ads.Type, pod.Name)
 	if NodeLockEnable {
 		nodelock.UseClient(kubeClient)
 		err := nodelock.LockNode(ads.NodeName, ads.Type)
@@ -300,6 +300,11 @@ func (ads *AscendDevices) Allocate(kubeClient kubernetes.Interface, pod *v1.Pod)
 	ads.PatchAnnotations(pod, &annotations, pod_devs)
 
 	ads.addResource(annotations, pod)
+	annotations[devices.AssignedNodeAnnotations] = ads.NodeName
+	annotations[devices.AssignedTimeAnnotations] = strconv.FormatInt(time.Now().Unix(), 10)
+	annotations[devices.DeviceBindPhase] = "allocating"
+	annotations[devices.BindTimeAnnotations] = strconv.FormatInt(time.Now().Unix(), 10)
+
 	err = devices.PatchPodAnnotations(kubeClient, pod, annotations)
 	if err != nil {
 		return err
@@ -349,6 +354,7 @@ func (ads *AscendDevices) selectDevices(pod *v1.Pod, schedulePolicy string) (dev
 	var pod_devs devices.PodSingleDevice
 	used_devs := make([]*AscendDevice, 0)
 	for _, req := range reqs {
+		klog.Infof("req %v", req)
 		available_devs := make([]*AscendDevice, 0)
 		for _, dev := range dup_devs {
 			selected := false
@@ -365,7 +371,9 @@ func (ads *AscendDevices) selectDevices(pod *v1.Pod, schedulePolicy string) (dev
 		req_nums := req.Nums
 		selected_devs := make([]*AscendDevice, 0)
 		for _, dev := range available_devs {
+			klog.Infof("xxxx check. req %v dev %v", req, dev)
 			if fit(&req, dev) == false {
+				klog.Infof("fit false. req %v dev %v", req, dev)
 				continue
 			}
 			selected_devs = append(selected_devs, dev)
@@ -374,7 +382,8 @@ func (ads *AscendDevices) selectDevices(pod *v1.Pod, schedulePolicy string) (dev
 				break
 			}
 		}
-		if req_nums >= 0 {
+		if req_nums > 0 {
+			klog.InfoS("xxxx req_nums > 0", "req_nums", req_nums)
 			return nil, errors.Errorf("no enough ascend device available")
 		}
 		if needTopology {
@@ -587,6 +596,7 @@ func (dev *AscendDevice) GenerateResourceRequests(ctr *v1.Container) devices.Con
 					memnum = int(m)
 				}
 			}
+			klog.Infof("raw mem %v memnum %d", mem, memnum)
 			corenum := int32(0)
 
 			mempnum := 0
