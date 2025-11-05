@@ -207,8 +207,6 @@ func (dp *deviceSharePlugin) OnSessionOpen(ssn *framework.Session) {
 
 	// Register event handlers to update task info in PodLister & nodeMap
 	ssn.AddPredicateFn(dp.Name(), func(task *api.TaskInfo, node *api.NodeInfo) error {
-		klog.Infof("xxx enter PredicateFn")
-		defer klog.Infof("xxx leave PredicateFn")
 		predicateStatus := make([]*api.Status, 0)
 		// Check PredicateWithCache
 		for _, val := range api.RegisteredDevices {
@@ -253,8 +251,6 @@ func (dp *deviceSharePlugin) OnSessionOpen(ssn *framework.Session) {
 	})
 
 	ssn.AddNodeOrderFn(dp.Name(), func(task *api.TaskInfo, node *api.NodeInfo) (float64, error) {
-		klog.Infof("xxx enter NodeOrderFn")
-		defer klog.Infof("xxx leave NodeOrderFn")
 		// DeviceScore
 		klog.Infof("Node: %s, task<%s/%s> NodeOrderFn", node.Name, task.Namespace, task.Name)
 		nodeScore := float64(0)

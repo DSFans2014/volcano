@@ -102,9 +102,9 @@ func NewAscendDevices(name string, node *v1.Node) map[string]*AscendDevices {
 	if cur_config == nil {
 		klog.InfoS("cur config is null. call InitDevicesConfig")
 		config.InitDevicesConfig(CMName, CMNamespace)
+		cur_config = config.GetConfig()
 	}
-	devs := InitDevices(config.GetConfig().VNPUs)
-	klog.Infof("NewAscendDevices. dev len %d", len(devs))
+	devs := InitDevices(cur_config.VNPUs)
 	for _, dev := range devs {
 		node_devices, err := dev.GetNodeDevices(*node)
 		if err != nil {
@@ -117,17 +117,38 @@ func NewAscendDevices(name string, node *v1.Node) map[string]*AscendDevices {
 			Devices:  make(map[string]*AscendDevice),
 		}
 		for _, nd := range node_devices {
-			dev.DeviceInfo = nd
-			dev.DeviceUsage = &devices.DeviceUsage{
-				Used:      0,
-				Usedmem:   0,
-				Usedcores: 0,
+			cur_dev := &AscendDevice{
+				config:           dev.config,
+				nodeRegisterAnno: dev.nodeRegisterAnno,
+				useUUIDAnno:      dev.useUUIDAnno,
+				noUseUUIDAnno:    dev.noUseUUIDAnno,
+				handshakeAnno:    dev.handshakeAnno,
+				DeviceInfo: 	  nd,
+				DeviceUsage:      &devices.DeviceUsage{
+							Used:      0,
+							Usedmem:   0,
+							Usedcores: 0,
+						  },
 			}
-			as_devices.Devices[nd.ID] = dev
+			as_devices.Devices[nd.ID] = cur_dev
+			klog.V(5).Infof("add device. ID %s dev_info %+v", cur_dev.DeviceInfo.ID, cur_dev.DeviceInfo)
 		}
 		ascend_devices[dev.CommonWord()] = as_devices
 	}
 	return ascend_devices
+}
+
+func GetAscendDeviceNames() ([]string){
+	cur_config := config.GetConfig()
+	if cur_config == nil {
+		config.InitDevicesConfig(CMName, CMNamespace)
+		cur_config = config.GetConfig()
+	}
+	deviceNames := make([]string, 0, len(cur_config.VNPUs))
+	for _, vnpu := range cur_config.VNPUs {
+		deviceNames = append(deviceNames, vnpu.CommonWord)
+	}
+	return deviceNames
 }
 
 func (ads *AscendDevices) AddResourceUsage(id string, cores int32, mem int32) error {
@@ -153,7 +174,6 @@ func (ads *AscendDevices) SubResourceUsage(id string, cores int32, mem int32) er
 }
 
 func (ads *AscendDevices) AddResource(pod *v1.Pod) {
-	klog.Infof("AscendDevices AddResource")
 	if ads == nil {
 		return
 	}
@@ -167,7 +187,6 @@ func (ads *AscendDevices) SubResource(pod *v1.Pod) {
 	ano_key := devices.InRequestDevices[ads.Type]
 	ano, ok := pod.Annotations[ano_key]
 	if !ok {
-		klog.Errorf("pod %s has no annotation %s", pod.Name, ano_key)
 		return
 	}
 	con_devs, err := devices.DecodeContainerDevices(ano)
@@ -184,7 +203,6 @@ func (ads *AscendDevices) addResource(annotations map[string]string, pod *v1.Pod
 	ano_key := devices.InRequestDevices[ads.Type]
 	ano, ok := annotations[ano_key]
 	if !ok {
-		klog.Errorf("pod %s has no annotation %s", pod.Name, ano_key)
 		return
 	}
 	con_devs, err := devices.DecodeContainerDevices(ano)
@@ -205,7 +223,6 @@ func (ads *AscendDevices) HasDeviceRequest(pod *v1.Pod) bool {
 	if !AscendVNPUEnable {
 		return false
 	}
-	klog.Infof("xxx %s check HasDeviceRequest", ads.Type)
 	rand_dev, err := ads.getRandomDevice()
 	if rand_dev == nil || err != nil {
 		return false
@@ -214,16 +231,16 @@ func (ads *AscendDevices) HasDeviceRequest(pod *v1.Pod) bool {
 	for _, container := range pod.Spec.Containers {
 		_, ok := container.Resources.Limits[v1.ResourceName(vnpu_config.ResourceName)]
 		if ok {
-			klog.Infof("xxx %s check HasDeviceRequest ok. %s", ads.Type, vnpu_config.ResourceName)
+			klog.V(5).Infof("%s check HasDeviceRequest ok. %s", ads.Type, vnpu_config.ResourceName)
 			return true
 		}
 		_, ok = container.Resources.Limits[v1.ResourceName(vnpu_config.ResourceMemoryName)]
 		if ok {
-			klog.Infof("xxx %s check HasDeviceRequest ok. %s", ads.Type, vnpu_config.ResourceMemoryName)
+			klog.V(5).Infof("%s check HasDeviceRequest ok. %s", ads.Type, vnpu_config.ResourceMemoryName)
 			return true
 		}
 	}
-	klog.Infof("xxx %s check HasDeviceRequest false", ads.Type)
+	klog.V(5).Infof("%s check HasDeviceRequest false", ads.Type)
 	return false
 }
 
@@ -312,7 +329,7 @@ func (ads *AscendDevices) Allocate(kubeClient kubernetes.Interface, pod *v1.Pod)
 	if NodeLockEnable {
 		nodelock.ReleaseNodeLock(ads.NodeName, ads.Type)
 	}
-	klog.V(3).Infoln("Allocate Success")
+	klog.V(4).Infof("Allocate Success. device %s Pod %s", ads.Type, pod.Name)
 	return nil
 }
 
@@ -326,7 +343,6 @@ func (ads *AscendDevices) GetIgnoredDevices() []string {
 		return []string{""}
 	}
 	vnpu_config := rand_dev.config
-	klog.Infof("IgnoredDevices %s", vnpu_config.ResourceMemoryName)
 	return []string{vnpu_config.ResourceMemoryName}
 }
 
@@ -354,7 +370,7 @@ func (ads *AscendDevices) selectDevices(pod *v1.Pod, schedulePolicy string) (dev
 	var pod_devs devices.PodSingleDevice
 	used_devs := make([]*AscendDevice, 0)
 	for _, req := range reqs {
-		klog.Infof("req %v", req)
+		klog.V(5).Infof("req %+v", req)
 		available_devs := make([]*AscendDevice, 0)
 		for _, dev := range dup_devs {
 			selected := false
@@ -371,9 +387,9 @@ func (ads *AscendDevices) selectDevices(pod *v1.Pod, schedulePolicy string) (dev
 		req_nums := req.Nums
 		selected_devs := make([]*AscendDevice, 0)
 		for _, dev := range available_devs {
-			klog.Infof("xxxx check. req %v dev %v", req, dev)
+			klog.V(5).Infof("check fit. req %+v dev_info %+v dev_usage %+v", req, dev.DeviceInfo, dev.DeviceUsage)
 			if fit(&req, dev) == false {
-				klog.Infof("fit false. req %v dev %v", req, dev)
+				klog.V(5).Infof("fit false. dev ID %s", dev.DeviceInfo.ID)
 				continue
 			}
 			selected_devs = append(selected_devs, dev)
@@ -383,7 +399,7 @@ func (ads *AscendDevices) selectDevices(pod *v1.Pod, schedulePolicy string) (dev
 			}
 		}
 		if req_nums > 0 {
-			klog.InfoS("xxxx req_nums > 0", "req_nums", req_nums)
+			klog.V(5).Infof("no enough ascend device available! raw req_nums %d cur req_nums %d", req.Nums, req_nums)
 			return nil, errors.Errorf("no enough ascend device available")
 		}
 		if needTopology {
@@ -442,7 +458,7 @@ func fit(req *devices.ContainerDeviceRequest, dev *AscendDevice) bool {
 }
 
 func getDeviceSnapshot(ads *AscendDevices) []*AscendDevice {
-	dup_devs := make([]*AscendDevice, 0)
+	dup_devs := make([]*AscendDevice, 0, len(ads.Devices))
 	for _, dev := range ads.Devices {
 		dup_dev := &AscendDevice{
 			config:           dev.config,
@@ -581,9 +597,7 @@ func (dev *AscendDevice) GenerateResourceRequests(ctr *v1.Container) devices.Con
 		v, ok = ctr.Resources.Requests[ascendResourceCount]
 	}
 	if ok {
-		klog.V(3).Infof("Counting %s devices", dev.config.CommonWord)
 		if n, ok := v.AsInt64(); ok {
-			klog.Info("Found AscendDevices devices")
 			memnum := 0
 			mem, ok := ctr.Resources.Limits[ascendResourceMem]
 			if !ok {
@@ -595,13 +609,22 @@ func (dev *AscendDevice) GenerateResourceRequests(ctr *v1.Container) devices.Con
 					m, _ := dev.trimMemory(memnums)
 					memnum = int(m)
 				}
+				klog.V(5).Infof("raw mem %d memnum %d", memnums, memnum)
 			}
-			klog.Infof("raw mem %v memnum %d", mem, memnum)
 			corenum := int32(0)
 
 			mempnum := 0
 			if memnum == 0 {
 				mempnum = 100
+			}
+
+			if corenum > 100 {
+				klog.ErrorS(nil, "core limit can't exceed 100", "device", dev.config.CommonWord)
+				corenum = 100
+			}
+			if mempnum != 0 && memnum == 0 {
+				memnum = int(dev.DeviceInfo.Devmem) * mempnum / 100
+				klog.V(5).Infof("new memreq %d totalmem %d mempercentage %d", memnum, dev.DeviceInfo.Devmem, mempnum)
 			}
 
 			return devices.ContainerDeviceRequest{

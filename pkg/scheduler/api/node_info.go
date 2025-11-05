@@ -514,6 +514,13 @@ func (ni *NodeInfo) addResource(pod *v1.Pod) {
 	}
 	ni.Others[vgpu.DeviceName].(Devices).AddResource(pod)
 	ni.Others[vnpu.DeviceName].(Devices).AddResource(pod)
+	for _, name := range ascend.GetAscendDeviceNames() {
+		if other, exists := ni.Others[name]; exists {
+			if devices, ok := other.(Devices); ok {
+                                devices.AddResource(pod)
+                        }
+                }
+        }
 }
 
 // subResource is used to subtract sharable devices
@@ -523,6 +530,13 @@ func (ni *NodeInfo) subResource(pod *v1.Pod) {
 	}
 	ni.Others[vgpu.DeviceName].(Devices).SubResource(pod)
 	ni.Others[vnpu.DeviceName].(Devices).SubResource(pod)
+	for _, name := range ascend.GetAscendDeviceNames() {
+		if other, exists := ni.Others[name]; exists {
+			if devices, ok := other.(Devices); ok {
+                                devices.SubResource(pod)
+	                }
+                }
+        }
 }
 
 // UpdateTask is used to update a task in nodeInfo object.
