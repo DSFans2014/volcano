@@ -109,7 +109,6 @@ func yamlStringToConfig(yamlStr string) (*config.Config, error) {
 }
 
 func Test_trimMemory(t *testing.T) {
-	_, err := yamlStringToConfig(config_yaml)
 	conf, err := yamlStringToConfig(config_yaml)
 	assert.Nil(t, err)
 	dev := AscendDevice{
