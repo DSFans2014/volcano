@@ -14,20 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/*
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package ascend
 
 import (
@@ -59,8 +45,8 @@ const (
 	spreadPolicy      = "spread"
 	binpackMultiplier = 100
 	spreadMultiplier  = 100
-	CMName = "volcano-vgpu-device-config"
-	CMNamespace = "kube-system"
+	CMName            = "volcano-vgpu-device-config"
+	CMNamespace       = "kube-system"
 )
 
 type AscendDevice struct {
@@ -87,65 +73,65 @@ type RuntimeInfo struct {
 }
 
 var (
-	AscendVNPUEnable   bool
-	configFile     string
-	NodeLockEnable bool
+	AscendVNPUEnable bool
+	configFile       string
+	NodeLockEnable   bool
 )
 
 func NewAscendDevices(name string, node *v1.Node) map[string]*AscendDevices {
-	ascend_devices := make(map[string]*AscendDevices)
+	ascendDevices := make(map[string]*AscendDevices)
 	if node == nil {
 		klog.Warningf("Node is nil for node %s, returning empty AscendDevices", name)
-		return ascend_devices
+		return ascendDevices
 	}
-	cur_config := config.GetConfig()
-	if cur_config == nil {
+	curConfig := config.GetConfig()
+	if curConfig == nil {
 		klog.V(5).InfoS("cur config is null. call InitDevicesConfig")
 		config.InitDevicesConfig(CMName, CMNamespace)
-		cur_config = config.GetConfig()
+		curConfig = config.GetConfig()
 	}
-	devs := InitDevices(cur_config.VNPUs)
+	devs := InitDevices(curConfig.VNPUs)
 	for _, dev := range devs {
-		node_devices, err := dev.GetNodeDevices(*node)
+		nodeDevices, err := dev.GetNodeDevices(*node)
 		if err != nil {
-			klog.Warningf("Failed to get node devices. nodeName %s, deviceType %s, error %s" , node.Name, dev.CommonWord(), err)
+			klog.Warningf("Failed to get node devices. nodeName %s, deviceType %s, error %s", node.Name, dev.CommonWord(), err)
 			continue
 		}
-		as_devices := &AscendDevices{
+		asDevices := &AscendDevices{
 			NodeName: name,
 			Type:     dev.CommonWord(),
 			Devices:  make(map[string]*AscendDevice),
 		}
-		for _, nd := range node_devices {
+		for _, nd := range nodeDevices {
 			cur_dev := &AscendDevice{
 				config:           dev.config,
 				nodeRegisterAnno: dev.nodeRegisterAnno,
 				useUUIDAnno:      dev.useUUIDAnno,
 				noUseUUIDAnno:    dev.noUseUUIDAnno,
 				handshakeAnno:    dev.handshakeAnno,
-				DeviceInfo: 	  nd,
-				DeviceUsage:      &devices.DeviceUsage{
-							Used:      0,
-							Usedmem:   0,
-							Usedcores: 0,
-						  },
+				DeviceInfo:       nd,
+				DeviceUsage: &devices.DeviceUsage{
+					Used:      0,
+					Usedmem:   0,
+					Usedcores: 0,
+				},
 			}
-			as_devices.Devices[nd.ID] = cur_dev
+			asDevices.Devices[nd.ID] = cur_dev
 			klog.V(5).Infof("add device. ID %s dev_info %+v", cur_dev.DeviceInfo.ID, cur_dev.DeviceInfo)
 		}
-		ascend_devices[dev.CommonWord()] = as_devices
+		ascendDevices[dev.CommonWord()] = asDevices
 	}
-	return ascend_devices
+	return ascendDevices
 }
 
-func GetAscendDeviceNames() ([]string){
-	cur_config := config.GetConfig()
-	if cur_config == nil {
+func GetAscendDeviceNames() []string {
+	curConfig := config.GetConfig()
+	if curConfig == nil {
 		config.InitDevicesConfig(CMName, CMNamespace)
-		cur_config = config.GetConfig()
+		curConfig = config.GetConfig()
 	}
-	deviceNames := make([]string, 0, len(cur_config.VNPUs))
-	for _, vnpu := range cur_config.VNPUs {
+	deviceNames := make([]string, 0, len(curConfig.VNPUs))
+	for _, vnpu := range curConfig.VNPUs {
 		deviceNames = append(deviceNames, vnpu.CommonWord)
 	}
 	return deviceNames
@@ -223,11 +209,11 @@ func (ads *AscendDevices) HasDeviceRequest(pod *v1.Pod) bool {
 	if !AscendVNPUEnable {
 		return false
 	}
-	rand_dev, err := ads.getRandomDevice()
-	if rand_dev == nil || err != nil {
+	randDev, err := ads.getFirstDevice()
+	if randDev == nil || err != nil {
 		return false
 	}
-	var vnpu_config = rand_dev.config
+	var vnpu_config = randDev.config
 	for _, container := range pod.Spec.Containers {
 		_, ok := container.Resources.Limits[v1.ResourceName(vnpu_config.ResourceName)]
 		if ok {
@@ -255,25 +241,25 @@ func (ads *AscendDevices) FilterNode(pod *v1.Pod, policy string) (int, string, e
 
 func (ads *AscendDevices) ScoreNode(pod *v1.Pod, policy string) float64 {
 	ads.Policy = policy
-	pod_devs, err := ads.selectDevices(pod, policy)
+	podDevs, err := ads.selectDevices(pod, policy)
 	if err != nil {
 		return 0
 	}
 	score := 0.0
-	var used_devs []*AscendDevice
-	for _, dev := range pod_devs {
+	var usedDevs []*AscendDevice
+	for _, dev := range podDevs {
 		dev, ok := ads.Devices[dev[0].UUID]
 		if !ok {
 			return 0
 		}
-		used_devs = append(used_devs, dev)
+		usedDevs = append(usedDevs, dev)
 		score += CalScore(policy, dev.DeviceUsage, dev.DeviceInfo)
 	}
 
-	if strings.HasPrefix(ads.Type, Ascend910Prefix) && hasNetworkID(used_devs) {
+	if strings.HasPrefix(ads.Type, Ascend910Prefix) && hasNetworkID(usedDevs) {
 		klog.V(4).Infof("all devices have NetworkID. device CommonWord %s", ads.Type)
 		cntMap := make(map[int]int)
-		for _, dev := range used_devs {
+		for _, dev := range usedDevs {
 			if dev.DeviceInfo.CustomInfo == nil {
 				return 0
 			}
@@ -309,12 +295,12 @@ func (ads *AscendDevices) Allocate(kubeClient kubernetes.Interface, pod *v1.Pod)
 			return errors.Errorf("node %s locked for %s hamivgpu lockname %s", ads.NodeName, pod.Name, err.Error())
 		}
 	}
-	pod_devs, err := ads.selectDevices(pod, ads.Policy)
+	podDevs, err := ads.selectDevices(pod, ads.Policy)
 	if err != nil {
 		return errors.Errorf("failed to select ascend devices for pod %s: %v", pod.Name, err)
 	}
 	annotations := make(map[string]string)
-	ads.PatchAnnotations(pod, &annotations, pod_devs)
+	ads.PatchAnnotations(pod, &annotations, podDevs)
 
 	ads.addResource(annotations, pod)
 	annotations[devices.AssignedNodeAnnotations] = ads.NodeName
@@ -338,12 +324,12 @@ func (ads *AscendDevices) Release(kubeClient kubernetes.Interface, pod *v1.Pod) 
 }
 
 func (ads *AscendDevices) GetIgnoredDevices() []string {
-	rand_dev, err := ads.getRandomDevice()
-	if rand_dev == nil || err != nil {
+	randDev, err := ads.getFirstDevice()
+	if randDev == nil || err != nil {
 		return []string{""}
 	}
-	vnpu_config := rand_dev.config
-	return []string{vnpu_config.ResourceMemoryName}
+	vnpuConfig := randDev.config
+	return []string{vnpuConfig.ResourceMemoryName}
 }
 
 func (ads *AscendDevices) GetStatus() string {
@@ -351,48 +337,48 @@ func (ads *AscendDevices) GetStatus() string {
 }
 
 func (ads *AscendDevices) selectDevices(pod *v1.Pod, schedulePolicy string) (devices.PodSingleDevice, error) {
-	dup_devs := getDeviceSnapshot(ads)
-	if len(dup_devs) == 0 {
+	dupDevs := getDeviceSnapshot(ads)
+	if len(dupDevs) == 0 {
 		return nil, errors.Errorf("no ascend device available")
 	}
-	for _, dev := range dup_devs {
+	for _, dev := range dupDevs {
 		dev.Score = CalScore(schedulePolicy, dev.DeviceUsage, dev.DeviceInfo)
 	}
-	sort.Slice(dup_devs, func(i, j int) bool {
-		return dup_devs[i].Score > dup_devs[j].Score
+	sort.Slice(dupDevs, func(i, j int) bool {
+		return dupDevs[i].Score > dupDevs[j].Score
 	})
 	needTopology := false
-	if strings.HasPrefix(ads.Type, Ascend910Prefix) && hasNetworkID(dup_devs) {
+	if strings.HasPrefix(ads.Type, Ascend910Prefix) && hasNetworkID(dupDevs) {
 		klog.V(4).Infof("all devices have NetworkID. device CommonWord %s", ads.Type)
 		needTopology = true
 	}
-	reqs := dup_devs[0].ResourceReqs(pod)
-	var pod_devs devices.PodSingleDevice
-	used_devs := make([]*AscendDevice, 0)
+	reqs := dupDevs[0].ResourceReqs(pod)
+	var podDevs devices.PodSingleDevice
+	usedDevs := make([]*AscendDevice, 0)
 	for _, req := range reqs {
 		klog.V(5).Infof("req %+v", req)
-		available_devs := make([]*AscendDevice, 0)
-		for _, dev := range dup_devs {
+		availableDevs := make([]*AscendDevice, 0)
+		for _, dev := range dupDevs {
 			selected := false
-			for _, used_dev := range used_devs {
-				if used_dev.DeviceInfo.ID == dev.DeviceInfo.ID {
+			for _, usedDev := range usedDevs {
+				if usedDev.DeviceInfo.ID == dev.DeviceInfo.ID {
 					selected = true
 					break
 				}
 			}
 			if !selected {
-				available_devs = append(available_devs, dev)
+				availableDevs = append(availableDevs, dev)
 			}
 		}
 		req_nums := req.Nums
-		selected_devs := make([]*AscendDevice, 0)
-		for _, dev := range available_devs {
+		selectedDevs := make([]*AscendDevice, 0)
+		for _, dev := range availableDevs {
 			klog.V(5).Infof("check fit. req %+v dev_info %+v dev_usage %+v", req, dev.DeviceInfo, dev.DeviceUsage)
 			if fit(&req, dev) == false {
 				klog.V(5).Infof("fit false. dev ID %s", dev.DeviceInfo.ID)
 				continue
 			}
-			selected_devs = append(selected_devs, dev)
+			selectedDevs = append(selectedDevs, dev)
 			req_nums -= 1
 			if req_nums <= 0 && !needTopology {
 				break
@@ -403,12 +389,12 @@ func (ads *AscendDevices) selectDevices(pod *v1.Pod, schedulePolicy string) (dev
 			return nil, errors.Errorf("no enough ascend device available")
 		}
 		if needTopology {
-			selected_devs = selectDevicesWithTopology(int(req.Nums), selected_devs)
+			selectedDevs = selectDevicesWithTopology(int(req.Nums), selectedDevs)
 		}
-		used_devs = append(used_devs, selected_devs...)
-		var con_devs devices.ContainerDevices
-		for _, dev := range selected_devs {
-			con_devs = append(con_devs, devices.ContainerDevice{
+		usedDevs = append(usedDevs, selectedDevs...)
+		var conDevs devices.ContainerDevices
+		for _, dev := range selectedDevs {
+			conDevs = append(conDevs, devices.ContainerDevice{
 				UUID:       dev.DeviceInfo.ID,
 				Type:       ads.Type,
 				Usedmem:    req.Memreq,
@@ -416,9 +402,9 @@ func (ads *AscendDevices) selectDevices(pod *v1.Pod, schedulePolicy string) (dev
 				CustomInfo: dev.DeviceInfo.CustomInfo,
 			})
 		}
-		pod_devs = append(pod_devs, con_devs)
+		podDevs = append(podDevs, conDevs)
 	}
-	return pod_devs, nil
+	return podDevs, nil
 }
 
 func hasNetworkID(devices []*AscendDevice) bool {
@@ -437,28 +423,28 @@ func fit(req *devices.ContainerDeviceRequest, dev *AscendDevice) bool {
 	if req.Type != dev.config.CommonWord {
 		return false
 	}
-	device_usage := dev.DeviceUsage
-	device_info := dev.DeviceInfo
-	if device_info.Count < device_usage.Used {
+	deviceUsage := dev.DeviceUsage
+	deviceInfo := dev.DeviceInfo
+	if deviceInfo.Count <= deviceUsage.Used {
 		return false
 	}
-	if device_info.Devmem-device_usage.Usedmem < req.Memreq {
+	if deviceInfo.Devmem-deviceUsage.Usedmem < req.Memreq {
 		return false
 	}
-	if device_info.Devcore-device_usage.Usedcores < req.Coresreq {
+	if deviceInfo.Devcore-deviceUsage.Usedcores < req.Coresreq {
 		return false
 	}
-	if device_info.Devcore == 100 && req.Coresreq == 100 && device_usage.Used > 0 {
+	if deviceInfo.Devcore == 100 && req.Coresreq == 100 && deviceUsage.Used > 0 {
 		return false
 	}
-	if device_info.Devcore != 0 && device_usage.Usedcores == device_info.Devcore && req.Coresreq == 0 {
+	if deviceInfo.Devcore != 0 && deviceUsage.Usedcores == deviceInfo.Devcore && req.Coresreq == 0 {
 		return false
 	}
 	return true
 }
 
 func getDeviceSnapshot(ads *AscendDevices) []*AscendDevice {
-	dup_devs := make([]*AscendDevice, 0, len(ads.Devices))
+	dupDevs := make([]*AscendDevice, 0, len(ads.Devices))
 	for _, dev := range ads.Devices {
 		dup_dev := &AscendDevice{
 			config:           dev.config,
@@ -473,19 +459,19 @@ func getDeviceSnapshot(ads *AscendDevices) []*AscendDevice {
 				Usedcores: dev.DeviceUsage.Usedcores,
 			},
 		}
-		dup_devs = append(dup_devs, dup_dev)
+		dupDevs = append(dupDevs, dup_dev)
 	}
-	return dup_devs
+	return dupDevs
 }
 
 func selectDevicesWithTopology(req_nums int, selected_devs []*AscendDevice) []*AscendDevice {
-	network_map := make(map[int][]*AscendDevice)
+	networkMap := make(map[int][]*AscendDevice)
 
 	for _, dev := range selected_devs {
 		if dev.DeviceInfo.CustomInfo != nil {
 			if networkID, ok := dev.DeviceInfo.CustomInfo["NetworkID"]; ok {
 				if id, ok := networkID.(float64); ok {
-					network_map[int(id)] = append(network_map[int(id)], dev)
+					networkMap[int(id)] = append(networkMap[int(id)], dev)
 				}
 			}
 		}
@@ -495,7 +481,7 @@ func selectDevicesWithTopology(req_nums int, selected_devs []*AscendDevice) []*A
 		Count     int
 	}
 	var sortedNetworks []NetworkDeviceCount
-	for networkID, devices := range network_map {
+	for networkID, devices := range networkMap {
 		sortedNetworks = append(sortedNetworks, NetworkDeviceCount{
 			NetworkID: networkID,
 			Count:     len(devices),
@@ -506,7 +492,7 @@ func selectDevicesWithTopology(req_nums int, selected_devs []*AscendDevice) []*A
 	})
 	devs := make([]*AscendDevice, 0)
 	for _, item := range sortedNetworks {
-		for _, dev := range network_map[item.NetworkID] {
+		for _, dev := range networkMap[item.NetworkID] {
 			devs = append(devs, dev)
 			if len(devs) == req_nums {
 				return devs
@@ -516,7 +502,7 @@ func selectDevicesWithTopology(req_nums int, selected_devs []*AscendDevice) []*A
 	return devs
 }
 
-func (ads *AscendDevices) getRandomDevice() (*AscendDevice, error) {
+func (ads *AscendDevices) getFirstDevice() (*AscendDevice, error) {
 	if len(ads.Devices) == 0 {
 		return nil, errors.New("no ascend device available")
 	}
@@ -651,7 +637,7 @@ func (dev *AscendDevice) ResourceReqs(pod *v1.Pod) []devices.ContainerDeviceRequ
 }
 
 func (ads *AscendDevices) PatchAnnotations(pod *v1.Pod, annoInput *map[string]string, devList devices.PodSingleDevice) map[string]string {
-	dev, err := ads.getRandomDevice()
+	dev, err := ads.getFirstDevice()
 	if err != nil {
 		return *annoInput
 	}

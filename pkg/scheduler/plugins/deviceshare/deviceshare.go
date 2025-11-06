@@ -137,7 +137,7 @@ func getDeviceScore(ctx context.Context, pod *v1.Pod, node *api.NodeInfo, schedu
 		if device.(api.Devices).HasDeviceRequest(pod) {
 			// Only process device types that use NodeOrderFn (vgpu and gpushare)
 			// vnpu devices use BatchNodeOrderFn, skip them here
-			if deviceType != vnpu.NPUDevices {
+			if deviceType != vnpu.DeviceName {
 				ns := device.(api.Devices).ScoreNode(pod, schedulePolicy)
 				s += ns
 			}

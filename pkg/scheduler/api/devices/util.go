@@ -34,7 +34,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -125,17 +124,6 @@ func GetNode(nodename string) (*v1.Node, error) {
 
 	klog.V(5).InfoS("Successfully fetched node", "nodeName", nodename)
 	return n, nil
-}
-
-func MarkAnnotationsToDelete(devType string, nn string) error {
-	tmppat := make(map[string]string)
-	tmppat[devType] = "Deleted_" + time.Now().Format(time.DateTime)
-	n, err := GetNode(nn)
-	if err != nil {
-		klog.Errorln("get node failed", err.Error())
-		return err
-	}
-	return PatchNodeAnnotations(n, tmppat)
 }
 
 func PatchPodAnnotations(kubeClient kubernetes.Interface, pod *v1.Pod, annotations map[string]string) error {
