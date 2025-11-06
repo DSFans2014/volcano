@@ -48,7 +48,7 @@ const (
 
 	VGPUEnable = "deviceshare.VGPUEnable"
 
-	ASCEND310PvGPU = "deviceshare.ASCEND310PVGPUEnable"
+	ASCEND310PvGPU   = "deviceshare.ASCEND310PVNPUEnable"
 	AscendVNPUEnable = "deviceshare.AscendVNPUEnable"
 
 	SchedulePolicyArgument = "deviceshare.SchedulePolicy"
@@ -59,7 +59,7 @@ const (
 )
 
 var (
-	once    sync.Once
+	once sync.Once
 )
 
 type deviceSharePlugin struct {
@@ -189,8 +189,6 @@ func initializeDevice(device api.Devices, ssn *framework.Session, nodeInfo *api.
 			klog.V(3).Infof("initialize ascend310p device.")
 			return vnpu310p.InitVNPUDevice(d, ssn, nodeInfo)
 		}
-	default:
-		return nil
 	}
 	return nil
 }
