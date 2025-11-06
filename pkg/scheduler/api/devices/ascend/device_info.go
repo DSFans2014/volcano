@@ -1,0 +1,704 @@
+/*
+Copyright 2025 The Volcano Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+/*
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package ascend
+
+import (
+	"encoding/json"
+	"flag"
+	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/pkg/errors"
+
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog/v2"
+	"volcano.sh/volcano/pkg/scheduler/api/devices"
+	"volcano.sh/volcano/pkg/scheduler/api/devices/config"
+	"volcano.sh/volcano/pkg/scheduler/plugins/util/nodelock"
+)
+
+const (
+	NodeLockAscend         = "hami.io/mutex.lock"
+	Ascend910Prefix        = "Ascend910"
+	Ascend910NetworkWeight = 10
+	// binpack means the lower device memory remained after this allocation, the better
+	binpackPolicy = "binpack"
+	// spread means better put this task into an idle GPU card than a shared GPU card
+	spreadPolicy      = "spread"
+	binpackMultiplier = 100
+	spreadMultiplier  = 100
+	CMName = "volcano-vgpu-device-config"
+	CMNamespace = "kube-system"
+)
+
+type AscendDevice struct {
+	config           config.VNPUConfig
+	nodeRegisterAnno string
+	useUUIDAnno      string
+	noUseUUIDAnno    string
+	handshakeAnno    string
+	DeviceInfo       *devices.DeviceInfo
+	DeviceUsage      *devices.DeviceUsage
+	Score            float64
+}
+
+type AscendDevices struct {
+	NodeName string
+	Type     string
+	Devices  map[string]*AscendDevice
+	Policy   string
+}
+
+type RuntimeInfo struct {
+	UUID string `json:"UUID,omitempty"`
+	Temp string `json:"temp,omitempty"`
+}
+
+var (
+	AscendVNPUEnable   bool
+	configFile     string
+	NodeLockEnable bool
+)
+
+func NewAscendDevices(name string, node *v1.Node) map[string]*AscendDevices {
+	ascend_devices := make(map[string]*AscendDevices)
+	if node == nil {
+		klog.Warningf("Node is nil for node %s, returning empty AscendDevices", name)
+		return ascend_devices
+	}
+	cur_config := config.GetConfig()
+	if cur_config == nil {
+		klog.V(5).InfoS("cur config is null. call InitDevicesConfig")
+		config.InitDevicesConfig(CMName, CMNamespace)
+		cur_config = config.GetConfig()
+	}
+	devs := InitDevices(cur_config.VNPUs)
+	for _, dev := range devs {
+		node_devices, err := dev.GetNodeDevices(*node)
+		if err != nil {
+			klog.Warningf("Failed to get node devices. nodeName %s, deviceType %s, error %s" , node.Name, dev.CommonWord(), err)
+			continue
+		}
+		as_devices := &AscendDevices{
+			NodeName: name,
+			Type:     dev.CommonWord(),
+			Devices:  make(map[string]*AscendDevice),
+		}
+		for _, nd := range node_devices {
+			cur_dev := &AscendDevice{
+				config:           dev.config,
+				nodeRegisterAnno: dev.nodeRegisterAnno,
+				useUUIDAnno:      dev.useUUIDAnno,
+				noUseUUIDAnno:    dev.noUseUUIDAnno,
+				handshakeAnno:    dev.handshakeAnno,
+				DeviceInfo: 	  nd,
+				DeviceUsage:      &devices.DeviceUsage{
+							Used:      0,
+							Usedmem:   0,
+							Usedcores: 0,
+						  },
+			}
+			as_devices.Devices[nd.ID] = cur_dev
+			klog.V(5).Infof("add device. ID %s dev_info %+v", cur_dev.DeviceInfo.ID, cur_dev.DeviceInfo)
+		}
+		ascend_devices[dev.CommonWord()] = as_devices
+	}
+	return ascend_devices
+}
+
+func GetAscendDeviceNames() ([]string){
+	cur_config := config.GetConfig()
+	if cur_config == nil {
+		config.InitDevicesConfig(CMName, CMNamespace)
+		cur_config = config.GetConfig()
+	}
+	deviceNames := make([]string, 0, len(cur_config.VNPUs))
+	for _, vnpu := range cur_config.VNPUs {
+		deviceNames = append(deviceNames, vnpu.CommonWord)
+	}
+	return deviceNames
+}
+
+func (ads *AscendDevices) AddResourceUsage(id string, cores int32, mem int32) error {
+	dev, ok := ads.Devices[id]
+	if !ok {
+		return fmt.Errorf("ascend device %s not found", id)
+	}
+	dev.DeviceUsage.Used++
+	dev.DeviceUsage.Usedcores += cores
+	dev.DeviceUsage.Usedmem += mem
+	return nil
+}
+
+func (ads *AscendDevices) SubResourceUsage(id string, cores int32, mem int32) error {
+	dev, ok := ads.Devices[id]
+	if !ok {
+		return fmt.Errorf("ascend device %s not found", id)
+	}
+	dev.DeviceUsage.Used--
+	dev.DeviceUsage.Usedcores -= cores
+	dev.DeviceUsage.Usedmem -= mem
+	return nil
+}
+
+func (ads *AscendDevices) AddResource(pod *v1.Pod) {
+	if ads == nil {
+		return
+	}
+	ads.addResource(pod.Annotations, pod)
+}
+
+func (ads *AscendDevices) SubResource(pod *v1.Pod) {
+	if ads == nil {
+		return
+	}
+	ano_key := devices.InRequestDevices[ads.Type]
+	ano, ok := pod.Annotations[ano_key]
+	if !ok {
+		return
+	}
+	con_devs, err := devices.DecodeContainerDevices(ano)
+	if err != nil {
+		klog.ErrorS(err, "failed to decode container devices", "pod", pod.Name, "annotation", ano)
+		return
+	}
+	for _, cono_dev := range con_devs {
+		ads.SubResourceUsage(cono_dev.UUID, cono_dev.Usedcores, cono_dev.Usedmem)
+	}
+}
+
+func (ads *AscendDevices) addResource(annotations map[string]string, pod *v1.Pod) {
+	ano_key := devices.InRequestDevices[ads.Type]
+	ano, ok := annotations[ano_key]
+	if !ok {
+		return
+	}
+	con_devs, err := devices.DecodeContainerDevices(ano)
+	if err != nil {
+		klog.ErrorS(err, "failed to decode container devices", "pod", pod.Name, "annotation", ano)
+		return
+	}
+	for _, cono_dev := range con_devs {
+		ads.AddResourceUsage(cono_dev.UUID, cono_dev.Usedcores, cono_dev.Usedmem)
+	}
+}
+
+func (ads *AscendDevices) AddQueueResource(pod *v1.Pod) map[string]float64 {
+	return map[string]float64{}
+}
+
+func (ads *AscendDevices) HasDeviceRequest(pod *v1.Pod) bool {
+	if !AscendVNPUEnable {
+		return false
+	}
+	rand_dev, err := ads.getRandomDevice()
+	if rand_dev == nil || err != nil {
+		return false
+	}
+	var vnpu_config = rand_dev.config
+	for _, container := range pod.Spec.Containers {
+		_, ok := container.Resources.Limits[v1.ResourceName(vnpu_config.ResourceName)]
+		if ok {
+			klog.V(5).Infof("%s check HasDeviceRequest ok. %s", ads.Type, vnpu_config.ResourceName)
+			return true
+		}
+		_, ok = container.Resources.Limits[v1.ResourceName(vnpu_config.ResourceMemoryName)]
+		if ok {
+			klog.V(5).Infof("%s check HasDeviceRequest ok. %s", ads.Type, vnpu_config.ResourceMemoryName)
+			return true
+		}
+	}
+	klog.V(5).Infof("%s check HasDeviceRequest false", ads.Type)
+	return false
+}
+
+func (ads *AscendDevices) FilterNode(pod *v1.Pod, policy string) (int, string, error) {
+	_, err := ads.selectDevices(pod, policy)
+	if err != nil {
+		return devices.Error, "no ascend device available", err
+	}
+	klog.V(4).Infoln("ascend DeviceSharing successfully filters pods. device_type:", ads.Type)
+	return devices.Success, "", nil
+}
+
+func (ads *AscendDevices) ScoreNode(pod *v1.Pod, policy string) float64 {
+	ads.Policy = policy
+	pod_devs, err := ads.selectDevices(pod, policy)
+	if err != nil {
+		return 0
+	}
+	score := 0.0
+	var used_devs []*AscendDevice
+	for _, dev := range pod_devs {
+		dev, ok := ads.Devices[dev[0].UUID]
+		if !ok {
+			return 0
+		}
+		used_devs = append(used_devs, dev)
+		score += CalScore(policy, dev.DeviceUsage, dev.DeviceInfo)
+	}
+
+	if strings.HasPrefix(ads.Type, Ascend910Prefix) && hasNetworkID(used_devs) {
+		klog.V(4).Infof("all devices have NetworkID. device CommonWord %s", ads.Type)
+		cntMap := make(map[int]int)
+		for _, dev := range used_devs {
+			if dev.DeviceInfo.CustomInfo == nil {
+				return 0
+			}
+			if networkID, ok := dev.DeviceInfo.CustomInfo["NetworkID"]; ok {
+				if id, ok := networkID.(float64); ok {
+					cntMap[int(id)]++
+				}
+			} else {
+				return 0
+			}
+		}
+		maxCnt, totalCnt := 0, 0
+		for _, cnt := range cntMap {
+			if cnt > maxCnt {
+				maxCnt = cnt
+			}
+			totalCnt += cnt
+		}
+		if totalCnt == 0 {
+			return 0
+		}
+		score += (float64(maxCnt) / float64(totalCnt)) * Ascend910NetworkWeight
+	}
+	return score
+}
+
+func (ads *AscendDevices) Allocate(kubeClient kubernetes.Interface, pod *v1.Pod) error {
+	klog.V(4).Infof("Allocate device %s to Pod %s", ads.Type, pod.Name)
+	if NodeLockEnable {
+		nodelock.UseClient(kubeClient)
+		err := nodelock.LockNode(ads.NodeName, ads.Type)
+		if err != nil {
+			return errors.Errorf("node %s locked for %s hamivgpu lockname %s", ads.NodeName, pod.Name, err.Error())
+		}
+	}
+	pod_devs, err := ads.selectDevices(pod, ads.Policy)
+	if err != nil {
+		return errors.Errorf("failed to select ascend devices for pod %s: %v", pod.Name, err)
+	}
+	annotations := make(map[string]string)
+	ads.PatchAnnotations(pod, &annotations, pod_devs)
+
+	ads.addResource(annotations, pod)
+	annotations[devices.AssignedNodeAnnotations] = ads.NodeName
+	annotations[devices.AssignedTimeAnnotations] = strconv.FormatInt(time.Now().Unix(), 10)
+	annotations[devices.DeviceBindPhase] = "allocating"
+	annotations[devices.BindTimeAnnotations] = strconv.FormatInt(time.Now().Unix(), 10)
+
+	err = devices.PatchPodAnnotations(kubeClient, pod, annotations)
+	if err != nil {
+		return err
+	}
+	if NodeLockEnable {
+		nodelock.ReleaseNodeLock(ads.NodeName, ads.Type)
+	}
+	klog.V(4).Infof("Allocate Success. device %s Pod %s", ads.Type, pod.Name)
+	return nil
+}
+
+func (ads *AscendDevices) Release(kubeClient kubernetes.Interface, pod *v1.Pod) error {
+	return nil
+}
+
+func (ads *AscendDevices) GetIgnoredDevices() []string {
+	rand_dev, err := ads.getRandomDevice()
+	if rand_dev == nil || err != nil {
+		return []string{""}
+	}
+	vnpu_config := rand_dev.config
+	return []string{vnpu_config.ResourceMemoryName}
+}
+
+func (ads *AscendDevices) GetStatus() string {
+	return ""
+}
+
+func (ads *AscendDevices) selectDevices(pod *v1.Pod, schedulePolicy string) (devices.PodSingleDevice, error) {
+	dup_devs := getDeviceSnapshot(ads)
+	if len(dup_devs) == 0 {
+		return nil, errors.Errorf("no ascend device available")
+	}
+	for _, dev := range dup_devs {
+		dev.Score = CalScore(schedulePolicy, dev.DeviceUsage, dev.DeviceInfo)
+	}
+	sort.Slice(dup_devs, func(i, j int) bool {
+		return dup_devs[i].Score > dup_devs[j].Score
+	})
+	needTopology := false
+	if strings.HasPrefix(ads.Type, Ascend910Prefix) && hasNetworkID(dup_devs) {
+		klog.V(4).Infof("all devices have NetworkID. device CommonWord %s", ads.Type)
+		needTopology = true
+	}
+	reqs := dup_devs[0].ResourceReqs(pod)
+	var pod_devs devices.PodSingleDevice
+	used_devs := make([]*AscendDevice, 0)
+	for _, req := range reqs {
+		klog.V(5).Infof("req %+v", req)
+		available_devs := make([]*AscendDevice, 0)
+		for _, dev := range dup_devs {
+			selected := false
+			for _, used_dev := range used_devs {
+				if used_dev.DeviceInfo.ID == dev.DeviceInfo.ID {
+					selected = true
+					break
+				}
+			}
+			if !selected {
+				available_devs = append(available_devs, dev)
+			}
+		}
+		req_nums := req.Nums
+		selected_devs := make([]*AscendDevice, 0)
+		for _, dev := range available_devs {
+			klog.V(5).Infof("check fit. req %+v dev_info %+v dev_usage %+v", req, dev.DeviceInfo, dev.DeviceUsage)
+			if fit(&req, dev) == false {
+				klog.V(5).Infof("fit false. dev ID %s", dev.DeviceInfo.ID)
+				continue
+			}
+			selected_devs = append(selected_devs, dev)
+			req_nums -= 1
+			if req_nums <= 0 && !needTopology {
+				break
+			}
+		}
+		if req_nums > 0 {
+			klog.V(5).Infof("no enough ascend device available! raw req_nums %d cur req_nums %d", req.Nums, req_nums)
+			return nil, errors.Errorf("no enough ascend device available")
+		}
+		if needTopology {
+			selected_devs = selectDevicesWithTopology(int(req.Nums), selected_devs)
+		}
+		used_devs = append(used_devs, selected_devs...)
+		var con_devs devices.ContainerDevices
+		for _, dev := range selected_devs {
+			con_devs = append(con_devs, devices.ContainerDevice{
+				UUID:       dev.DeviceInfo.ID,
+				Type:       ads.Type,
+				Usedmem:    req.Memreq,
+				Usedcores:  req.Coresreq,
+				CustomInfo: dev.DeviceInfo.CustomInfo,
+			})
+		}
+		pod_devs = append(pod_devs, con_devs)
+	}
+	return pod_devs, nil
+}
+
+func hasNetworkID(devices []*AscendDevice) bool {
+	for _, dev := range devices {
+		if dev.DeviceInfo.CustomInfo == nil {
+			return false
+		}
+		if _, ok := dev.DeviceInfo.CustomInfo["NetworkID"]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func fit(req *devices.ContainerDeviceRequest, dev *AscendDevice) bool {
+	if req.Type != dev.config.CommonWord {
+		return false
+	}
+	device_usage := dev.DeviceUsage
+	device_info := dev.DeviceInfo
+	if device_info.Count < device_usage.Used {
+		return false
+	}
+	if device_info.Devmem-device_usage.Usedmem < req.Memreq {
+		return false
+	}
+	if device_info.Devcore-device_usage.Usedcores < req.Coresreq {
+		return false
+	}
+	if device_info.Devcore == 100 && req.Coresreq == 100 && device_usage.Used > 0 {
+		return false
+	}
+	if device_info.Devcore != 0 && device_usage.Usedcores == device_info.Devcore && req.Coresreq == 0 {
+		return false
+	}
+	return true
+}
+
+func getDeviceSnapshot(ads *AscendDevices) []*AscendDevice {
+	dup_devs := make([]*AscendDevice, 0, len(ads.Devices))
+	for _, dev := range ads.Devices {
+		dup_dev := &AscendDevice{
+			config:           dev.config,
+			nodeRegisterAnno: dev.nodeRegisterAnno,
+			useUUIDAnno:      dev.useUUIDAnno,
+			noUseUUIDAnno:    dev.noUseUUIDAnno,
+			handshakeAnno:    dev.handshakeAnno,
+			DeviceInfo:       dev.DeviceInfo,
+			DeviceUsage: &devices.DeviceUsage{
+				Used:      dev.DeviceUsage.Used,
+				Usedmem:   dev.DeviceUsage.Usedmem,
+				Usedcores: dev.DeviceUsage.Usedcores,
+			},
+		}
+		dup_devs = append(dup_devs, dup_dev)
+	}
+	return dup_devs
+}
+
+func selectDevicesWithTopology(req_nums int, selected_devs []*AscendDevice) []*AscendDevice {
+	network_map := make(map[int][]*AscendDevice)
+
+	for _, dev := range selected_devs {
+		if dev.DeviceInfo.CustomInfo != nil {
+			if networkID, ok := dev.DeviceInfo.CustomInfo["NetworkID"]; ok {
+				if id, ok := networkID.(float64); ok {
+					network_map[int(id)] = append(network_map[int(id)], dev)
+				}
+			}
+		}
+	}
+	type NetworkDeviceCount struct {
+		NetworkID int
+		Count     int
+	}
+	var sortedNetworks []NetworkDeviceCount
+	for networkID, devices := range network_map {
+		sortedNetworks = append(sortedNetworks, NetworkDeviceCount{
+			NetworkID: networkID,
+			Count:     len(devices),
+		})
+	}
+	sort.Slice(sortedNetworks, func(i, j int) bool {
+		return sortedNetworks[i].Count > sortedNetworks[j].Count
+	})
+	devs := make([]*AscendDevice, 0)
+	for _, item := range sortedNetworks {
+		for _, dev := range network_map[item.NetworkID] {
+			devs = append(devs, dev)
+			if len(devs) == req_nums {
+				return devs
+			}
+		}
+	}
+	return devs
+}
+
+func (ads *AscendDevices) getRandomDevice() (*AscendDevice, error) {
+	if len(ads.Devices) == 0 {
+		return nil, errors.New("no ascend device available")
+	}
+	for _, dev := range ads.Devices {
+		return dev, nil
+	}
+	return nil, errors.New("no ascend device available")
+}
+
+func (dev *AscendDevice) trimMemory(m int64) (int64, string) {
+	for i := range dev.config.Templates {
+		if m <= dev.config.Templates[i].Memory {
+			return dev.config.Templates[i].Memory, dev.config.Templates[i].Name
+		}
+	}
+	if m <= dev.config.MemoryCapacity {
+		return dev.config.MemoryAllocatable, ""
+	}
+	return 0, ""
+}
+
+func InitDevices(config []config.VNPUConfig) []*AscendDevice {
+	devs := make([]*AscendDevice, 0)
+	for _, vnpu := range config {
+		commonWord := vnpu.CommonWord
+		dev := &AscendDevice{
+			config:           vnpu,
+			nodeRegisterAnno: fmt.Sprintf("hami.io/node-register-%s", commonWord),
+			useUUIDAnno:      fmt.Sprintf("hami.io/use-%s-uuid", commonWord),
+			noUseUUIDAnno:    fmt.Sprintf("hami.io/no-use-%s-uuid", commonWord),
+			handshakeAnno:    fmt.Sprintf("hami.io/node-handshake-%s", commonWord),
+		}
+		sort.Slice(dev.config.Templates, func(i, j int) bool {
+			return dev.config.Templates[i].Memory < dev.config.Templates[j].Memory
+		})
+		_, ok := devices.InRequestDevices[commonWord]
+		if !ok {
+			devices.InRequestDevices[commonWord] = fmt.Sprintf("hami.io/%s-devices-to-allocate", commonWord)
+			devices.SupportDevices[commonWord] = fmt.Sprintf("hami.io/%s-devices-allocated", commonWord)
+			// util.HandshakeAnnos[commonWord] = dev.handshakeAnno
+		}
+		devs = append(devs, dev)
+		klog.Infof("load ascend vnpu config %s: %v", commonWord, dev.config)
+	}
+	return devs
+}
+
+func ParseConfig(fs *flag.FlagSet) {
+	fs.BoolVar(&AscendVNPUEnable, "AscendVNPUEnable", false, "enable ascend device")
+}
+
+func (dev *AscendDevice) CommonWord() string {
+	return dev.config.CommonWord
+}
+
+func (dev *AscendDevice) GetNodeDevices(n v1.Node) ([]*devices.DeviceInfo, error) {
+	anno, ok := n.Annotations[dev.nodeRegisterAnno]
+	if !ok {
+		return []*devices.DeviceInfo{}, fmt.Errorf("annos not found %s", dev.nodeRegisterAnno)
+	}
+	nodeDevices, err := devices.UnMarshalNodeDevices(anno)
+	if err != nil {
+		klog.ErrorS(err, "failed to unmarshal node devices", "node", n.Name, "device annotation", anno)
+		return []*devices.DeviceInfo{}, err
+	}
+	if len(nodeDevices) == 0 {
+		klog.InfoS("no gpu device found", "node", n.Name, "device annotation", anno)
+		return []*devices.DeviceInfo{}, errors.New("no device found on node")
+	}
+	return nodeDevices, nil
+}
+
+func (dev *AscendDevice) GenerateResourceRequests(ctr *v1.Container) devices.ContainerDeviceRequest {
+	ascendResourceCount := v1.ResourceName(dev.config.ResourceName)
+	ascendResourceMem := v1.ResourceName(dev.config.ResourceMemoryName)
+	v, ok := ctr.Resources.Limits[ascendResourceCount]
+	if !ok {
+		v, ok = ctr.Resources.Requests[ascendResourceCount]
+	}
+	if ok {
+		if n, ok := v.AsInt64(); ok {
+			memnum := 0
+			mem, ok := ctr.Resources.Limits[ascendResourceMem]
+			if !ok {
+				mem, ok = ctr.Resources.Requests[ascendResourceMem]
+			}
+			if ok {
+				memnums, ok := mem.AsInt64()
+				if ok {
+					m, _ := dev.trimMemory(memnums)
+					memnum = int(m)
+				}
+				klog.V(5).Infof("raw mem %d memnum %d", memnums, memnum)
+			}
+			corenum := int32(0)
+
+			mempnum := 0
+			if memnum == 0 {
+				mempnum = 100
+			}
+
+			if corenum > 100 {
+				klog.ErrorS(nil, "core limit can't exceed 100", "device", dev.config.CommonWord)
+				corenum = 100
+			}
+			if mempnum != 0 && memnum == 0 {
+				memnum = int(dev.DeviceInfo.Devmem) * mempnum / 100
+				klog.V(5).Infof("new memreq %d totalmem %d mempercentage %d", memnum, dev.DeviceInfo.Devmem, mempnum)
+			}
+
+			return devices.ContainerDeviceRequest{
+				Nums:             int32(n),
+				Type:             dev.CommonWord(),
+				Memreq:           int32(memnum),
+				MemPercentagereq: int32(mempnum),
+				Coresreq:         corenum,
+			}
+		}
+	}
+	return devices.ContainerDeviceRequest{}
+}
+
+func (dev *AscendDevice) ResourceReqs(pod *v1.Pod) []devices.ContainerDeviceRequest {
+	var reqs []devices.ContainerDeviceRequest
+	for _, ctr := range pod.Spec.Containers {
+		req := dev.GenerateResourceRequests(&ctr)
+		if req.Nums > 0 {
+			reqs = append(reqs, req)
+		}
+	}
+	return reqs
+}
+
+func (ads *AscendDevices) PatchAnnotations(pod *v1.Pod, annoInput *map[string]string, devList devices.PodSingleDevice) map[string]string {
+	dev, err := ads.getRandomDevice()
+	if err != nil {
+		return *annoInput
+	}
+	commonWord := dev.CommonWord()
+
+	(*annoInput)[devices.InRequestDevices[commonWord]] = devices.EncodePodSingleDevice(devList)
+	(*annoInput)[devices.SupportDevices[commonWord]] = devices.EncodePodSingleDevice(devList)
+	(*annoInput)["predicate-time"] = strconv.FormatInt(time.Now().Unix(), 10)
+	allocateStr := fmt.Sprintf("huawei.com/%s", dev.CommonWord())
+	var rtInfo []RuntimeInfo
+	for _, dp := range devList {
+		for _, val := range dp {
+			_, temp := dev.trimMemory(int64(val.Usedmem))
+			rtInfo = append(rtInfo, RuntimeInfo{
+				UUID: val.UUID,
+				Temp: temp,
+			})
+		}
+	}
+	s, err := json.Marshal(rtInfo)
+	if err != nil {
+		klog.ErrorS(err, "failed to marshal runtime info", "runtime info", rtInfo)
+	}
+	(*annoInput)[allocateStr] = string(s)
+
+	return *annoInput
+}
+
+func (dev *AscendDevice) GetResourceNames() devices.ResourceNames {
+	return devices.ResourceNames{
+		ResourceCountName:  dev.config.ResourceName,
+		ResourceMemoryName: dev.config.ResourceMemoryName,
+		ResourceCoreName:   "",
+	}
+}
+
+func CalScore(schedulePolicy string, dev_usage *devices.DeviceUsage, dev_info *devices.DeviceInfo) float64 {
+	var score float64
+	switch schedulePolicy {
+	case binpackPolicy:
+		score = binpackMultiplier * (float64(dev_usage.Usedmem) / float64(dev_info.Devmem))
+	case spreadPolicy:
+		if dev_usage.Used == 1 {
+			score = spreadMultiplier
+		}
+	default:
+		score = float64(0)
+	}
+	return score
+}
