@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Volcano Authors.
+Copyright 2025 The Volcano Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ import (
 	"testing"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v2"
-        //"volcano.sh/volcano/pkg/scheduler/api/devices"
+        "volcano.sh/volcano/pkg/scheduler/api/devices"
 	"volcano.sh/volcano/pkg/scheduler/api/devices/config"
 )
 
@@ -155,6 +155,119 @@ func Test_trimMemory(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 		    got, _ := dev.trimMemory(tt.inputMem)
 		    assert.Equal(t, tt.wantMem, got)
+		})
+	}
+}
+
+func Test_fit(t *testing.T) {
+	_, err := yamlStringToConfig(config_yaml)
+	conf, err := yamlStringToConfig(config_yaml)
+	assert.Nil(t, err)
+	device_info := &devices.DeviceInfo{
+		ID: "68496E64-20E05477-92C31323-6E78030A-BD003019",
+		Index: 0,
+		Count: 7,
+		Devcore: 8,
+		Devmem: 21527,
+	}
+	tests := []struct {
+		name      string
+		req       *devices.ContainerDeviceRequest
+		dev       *AscendDevice
+		result    bool
+	}{
+		{
+			"test1",
+			&devices.ContainerDeviceRequest {
+				Nums: 1,
+				Type: "Ascend310P",
+				Memreq: 1024,
+			},
+			&AscendDevice {
+				config: conf.VNPUs[0],
+				DeviceInfo: device_info,
+				DeviceUsage: &devices.DeviceUsage{
+					Used: 1,
+					Usedmem: 3072,
+				},
+			},
+			true,
+		},
+		{
+			"test2",
+			&devices.ContainerDeviceRequest {
+				Nums: 1,
+				Type: "Ascend310P",
+				Memreq: 21527,
+			},
+			&AscendDevice {
+				config: conf.VNPUs[0],
+				DeviceInfo: device_info,
+				DeviceUsage: &devices.DeviceUsage{
+					Used: 1,
+					Usedmem: 3072,
+				},
+			},
+			false,
+		},
+		{
+			"test3",
+			&devices.ContainerDeviceRequest {
+				Nums: 1,
+				Type: "Ascend310P",
+				Memreq: 6144,
+			},
+			&AscendDevice {
+				config: conf.VNPUs[0],
+				DeviceInfo: device_info,
+				DeviceUsage: &devices.DeviceUsage{
+					Used: 1,
+					Usedmem: 12288,
+				},
+			},
+			true,
+		},
+		{
+			"test4",
+			&devices.ContainerDeviceRequest {
+				Nums: 1,
+				Type: "Ascend310P",
+				Memreq: 24576,
+			},
+			&AscendDevice {
+				config: conf.VNPUs[0],
+				DeviceInfo: device_info,
+				DeviceUsage: &devices.DeviceUsage{
+					Used: 0,
+					Usedmem: 0,
+				},
+			},
+			false,
+		},
+		{
+			"test5_core",
+			&devices.ContainerDeviceRequest {
+				Nums: 1,
+				Type: "Ascend310P",
+				Memreq: 6144,
+				Coresreq: 4,
+			},
+			&AscendDevice {
+				config: conf.VNPUs[0],
+				DeviceInfo: device_info,
+				DeviceUsage: &devices.DeviceUsage{
+					Used: 1,
+					Usedmem: 12288,
+					Usedcores: 6,
+				},
+			},
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+		    ret := fit(tt.req, tt.dev)
+		    assert.Equal(t, tt.result, ret)
 		})
 	}
 }
