@@ -100,7 +100,7 @@ func NewAscendDevices(name string, node *v1.Node) map[string]*AscendDevices {
 	}
 	cur_config := config.GetConfig()
 	if cur_config == nil {
-		klog.InfoS("cur config is null. call InitDevicesConfig")
+		klog.V(5).InfoS("cur config is null. call InitDevicesConfig")
 		config.InitDevicesConfig(CMName, CMNamespace)
 		cur_config = config.GetConfig()
 	}

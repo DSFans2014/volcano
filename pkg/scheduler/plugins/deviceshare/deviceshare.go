@@ -81,7 +81,6 @@ func (dp *deviceSharePlugin) Name() string {
 }
 
 func enablePredicate(dsp *deviceSharePlugin) {
-	klog.Infof("enablePredicate")
 	// Checks whether predicate.GPUSharingEnable is provided or not, if given, modifies the value in predicateEnable struct.
 	nodeLockEnable := false
 	args := dsp.pluginArguments
@@ -91,7 +90,6 @@ func enablePredicate(dsp *deviceSharePlugin) {
 	args.GetBool(&vgpu.VGPUEnable, VGPUEnable)
 	args.GetBool(&vnpu.Ascend310pvNPUEnable, ASCEND310PvGPU)
 	args.GetBool(&ascend.AscendVNPUEnable, AscendVNPUEnable)
-	klog.Infof("ascend.AscendVNPUEnable %t", ascend.AscendVNPUEnable)
 
 	gpushare.NodeLockEnable = nodeLockEnable
 	vgpu.NodeLockEnable = nodeLockEnable
@@ -137,16 +135,12 @@ func getDeviceScore(ctx context.Context, pod *v1.Pod, node *api.NodeInfo, schedu
 	s := float64(0)
 	for deviceType, device := range node.Others {
 		if device.(api.Devices).HasDeviceRequest(pod) {
-			var ns float64
 			// Only process device types that use NodeOrderFn (vgpu and gpushare)
 			// vnpu devices use BatchNodeOrderFn, skip them here
-			if deviceType == vgpu.DeviceName || deviceType == gpushare.DeviceName {
-				ns = device.(api.Devices).ScoreNode(pod, schedulePolicy)
-			} else {
-				// Other device types (like vnpu) use BatchNodeOrderFn, skip scoring here
-				continue
+			if deviceType != vnpu.NPUDevices {
+				ns := device.(api.Devices).ScoreNode(pod, schedulePolicy)
+				s += ns
 			}
-			s += ns
 		}
 	}
 	klog.V(4).Infof("deviceScore for task %s/%s is: %v", pod.Namespace, pod.Name, s)
@@ -252,7 +246,6 @@ func (dp *deviceSharePlugin) OnSessionOpen(ssn *framework.Session) {
 
 	ssn.AddNodeOrderFn(dp.Name(), func(task *api.TaskInfo, node *api.NodeInfo) (float64, error) {
 		// DeviceScore
-		klog.Infof("Node: %s, task<%s/%s> NodeOrderFn", node.Name, task.Namespace, task.Name)
 		nodeScore := float64(0)
 		if dp.scheduleWeight > 0 {
 			score, status := getDeviceScore(context.TODO(), task.Pod, node, dp.schedulePolicy)
@@ -265,7 +258,6 @@ func (dp *deviceSharePlugin) OnSessionOpen(ssn *framework.Session) {
 			nodeScore = float64(score) * float64(dp.scheduleWeight)
 			klog.V(5).Infof("Node: %s, task<%s/%s> Device Score weight %d, score: %f", node.Name, task.Namespace, task.Name, dp.scheduleWeight, nodeScore)
 		}
-		klog.Infof("Node: %s, task<%s/%s> NodeOrderFn end", node.Name, task.Namespace, task.Name)
 		return nodeScore, nil
 	})
 
