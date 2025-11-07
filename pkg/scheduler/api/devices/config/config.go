@@ -67,7 +67,7 @@ const (
 type Config struct {
 	//NvidiaConfig is used for vGPU feature for nvidia, gpushare is not using this config
 	NvidiaConfig NvidiaConfig `yaml:"nvidia"`
-	VNPUs []VNPUConfig        `yaml:"vnpus"`
+	VNPUs        []VNPUConfig `yaml:"vnpus"`
 }
 
 var (

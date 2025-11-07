@@ -74,7 +74,6 @@ type RuntimeInfo struct {
 
 var (
 	AscendVNPUEnable bool
-	configFile       string
 	NodeLockEnable   bool
 )
 
@@ -374,7 +373,7 @@ func (ads *AscendDevices) selectDevices(pod *v1.Pod, schedulePolicy string) (dev
 		selectedDevs := make([]*AscendDevice, 0)
 		for _, dev := range availableDevs {
 			klog.V(5).Infof("check fit. req %+v dev_info %+v dev_usage %+v", req, dev.DeviceInfo, dev.DeviceUsage)
-			if fit(&req, dev) == false {
+			if !fit(&req, dev) {
 				klog.V(5).Infof("fit false. dev ID %s", dev.DeviceInfo.ID)
 				continue
 			}

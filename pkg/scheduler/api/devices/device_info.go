@@ -28,14 +28,14 @@ import (
 )
 
 type DeviceInfo struct {
-	ID              string          `json:"id,omitempty"`
-	Index           uint            `json:"index,omitempty"`
-	Count           int32           `json:"count,omitempty"`
-	Devmem          int32           `json:"devmem,omitempty"`
-	Devcore         int32           `json:"devcore,omitempty"`
-	Type            string          `json:"type,omitempty"`
-	Numa            int             `json:"numa,omitempty"`
-	Mode            string          `json:"mode,omitempty"`
+	ID      string `json:"id,omitempty"`
+	Index   uint   `json:"index,omitempty"`
+	Count   int32  `json:"count,omitempty"`
+	Devmem  int32  `json:"devmem,omitempty"`
+	Devcore int32  `json:"devcore,omitempty"`
+	Type    string `json:"type,omitempty"`
+	Numa    int    `json:"numa,omitempty"`
+	Mode    string `json:"mode,omitempty"`
 	// MIGTemplate     []Geometry      `json:"migtemplate,omitempty"`
 	Health          bool            `json:"health,omitempty"`
 	DeviceVendor    string          `json:"devicevendor,omitempty"`
@@ -52,12 +52,12 @@ type DevicePairScore struct {
 type DeviceUsage struct {
 	// ID          string
 	// Index       uint
-	Used        int32
+	Used int32
 	// Count       int32
-	Usedmem     int32
+	Usedmem int32
 	// Totalmem    int32
 	// Totalcore   int32
-	Usedcores   int32
+	Usedcores int32
 	// Mode        string
 	// MigTemplate []Geometry
 	// MigUsage    MigInUse
@@ -100,9 +100,9 @@ const (
 )
 
 var (
-	HandshakeAnnos = map[string]string{}
+	HandshakeAnnos   = map[string]string{}
 	InRequestDevices = map[string]string{}
-	SupportDevices = map[string]string{}
+	SupportDevices   = map[string]string{}
 )
 
 type ContainerDevices []ContainerDevice
