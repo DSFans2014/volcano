@@ -45,8 +45,6 @@ const (
 	spreadPolicy      = "spread"
 	binpackMultiplier = 100
 	spreadMultiplier  = 100
-	CMName            = "volcano-vgpu-device-config"
-	CMNamespace       = "kube-system"
 )
 
 type AscendDevice struct {
@@ -85,9 +83,8 @@ func NewAscendDevices(name string, node *v1.Node) map[string]*AscendDevices {
 	}
 	curConfig := config.GetConfig()
 	if curConfig == nil {
-		klog.V(5).InfoS("cur config is null. call InitDevicesConfig")
-		config.InitDevicesConfig(CMName, CMNamespace)
-		curConfig = config.GetConfig()
+		klog.V(5).InfoS("cur config is null. call GetDefaultDevicesConfig")
+		curConfig = config.GetDefaultDevicesConfig()
 	}
 	devs := InitDevices(curConfig.VNPUs)
 	for _, dev := range devs {
@@ -126,8 +123,8 @@ func NewAscendDevices(name string, node *v1.Node) map[string]*AscendDevices {
 func GetAscendDeviceNames() []string {
 	curConfig := config.GetConfig()
 	if curConfig == nil {
-		config.InitDevicesConfig(CMName, CMNamespace)
-		curConfig = config.GetConfig()
+		klog.V(5).InfoS("cur config is null. call GetDefaultDevicesConfig")
+		curConfig = config.GetDefaultDevicesConfig()
 	}
 	deviceNames := make([]string, 0, len(curConfig.VNPUs))
 	for _, vnpu := range curConfig.VNPUs {

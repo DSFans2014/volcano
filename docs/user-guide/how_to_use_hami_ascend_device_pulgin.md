@@ -50,6 +50,8 @@ data:
         arguments:
           deviceshare.AscendVNPUEnable: true   # enable ascend vnpu
           deviceshare.SchedulePolicy: binpack  # scheduling policy. binpack / spread
+          deviceshare.KnownGeometriesCMNamespace: kube-system
+          deviceshare.KnownGeometriesCMName: hami-scheduler-device
 ```
 
 ## Usage
