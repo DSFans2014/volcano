@@ -26,10 +26,10 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+
 	"volcano.sh/volcano/pkg/scheduler/api/devices"
 	"volcano.sh/volcano/pkg/scheduler/api/devices/config"
 	"volcano.sh/volcano/pkg/scheduler/plugins/util/nodelock"

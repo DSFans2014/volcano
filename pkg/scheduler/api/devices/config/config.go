@@ -116,6 +116,38 @@ func GetDefaultDevicesConfig() *Config {
 			DeviceCoreScaling:   1,
 			DisableCoreLimit:    false,
 		},
+		VNPUs: []VNPUConfig{
+			{
+				CommonWord:         "Ascend310P",
+				ChipName:           "310P3",
+				ResourceName:       "huawei.com/Ascend310P",
+				ResourceMemoryName: "huawei.com/Ascend310P-memory",
+				MemoryAllocatable:  21527,
+				MemoryCapacity:     24576,
+				AICore:             8,
+				AICPU:              7,
+				Templates: []Template{
+					{
+						Name:   "vir01",
+						Memory: 3072,
+						AICore: 1,
+						AICPU:  1,
+					},
+					{
+						Name:   "vir02",
+						Memory: 6144,
+						AICore: 2,
+						AICPU:  2,
+					},
+					{
+						Name:   "vir04",
+						Memory: 12288,
+						AICore: 4,
+						AICPU:  4,
+					},
+				},
+			},
+		},
 	}
 }
 

@@ -27,8 +27,99 @@ import (
 
 var config_yaml = `
 vnpus:
+- chipName: 910A
+  commonWord: Ascend910A
+  resourceName: huawei.com/Ascend910A
+  resourceMemoryName: huawei.com/Ascend910A-memory
+  memoryAllocatable: 32768
+  memoryCapacity: 32768
+  aiCore: 30
+  templates:
+    - name: vir02
+      memory: 2184
+      aiCore: 2
+    - name: vir04
+      memory: 4369
+      aiCore: 4
+    - name: vir08
+      memory: 8738
+      aiCore: 8
+    - name: vir16
+      memory: 17476
+      aiCore: 16
+- chipName: 910B2
+  commonWord: Ascend910B2
+  resourceName: huawei.com/Ascend910B2
+  resourceMemoryName: huawei.com/Ascend910B2-memory
+  memoryAllocatable: 65536
+  memoryCapacity: 65536
+  aiCore: 24
+  aiCPU: 6
+  templates:
+    - name: vir03_1c_8g
+      memory: 8192
+      aiCore: 3
+      aiCPU: 1
+    - name: vir06_1c_16g
+      memory: 16384
+      aiCore: 6
+      aiCPU: 1
+    - name: vir12_3c_32g
+      memory: 32768
+      aiCore: 12
+      aiCPU: 3
+- chipName: 910B3
+  commonWord: Ascend910B3
+  resourceName: huawei.com/Ascend910B3
+  resourceMemoryName: huawei.com/Ascend910B3-memory
+  memoryAllocatable: 65536
+  memoryCapacity: 65536
+  aiCore: 20
+  aiCPU: 7
+  templates:
+    - name: vir05_1c_16g
+      memory: 16384
+      aiCore: 5
+      aiCPU: 1
+    - name: vir10_3c_32g
+      memory: 32768
+      aiCore: 10
+      aiCPU: 3
+- chipName: 910B4-1
+  commonWord: Ascend910B4-1
+  resourceName: huawei.com/Ascend910B4-1
+  resourceMemoryName: huawei.com/Ascend910B4-1-memory
+  memoryAllocatable: 65536
+  memoryCapacity: 65536
+  aiCore: 20
+  aiCPU: 7
+  templates:
+    - name: vir05_1c_8g
+      memory: 8192
+      aiCore: 5
+      aiCPU: 1
+    - name: vir10_3c_16g
+      memory: 16384
+      aiCore: 10
+      aiCPU: 3
+- chipName: 910B4
+  commonWord: Ascend910B4
+  resourceName: huawei.com/Ascend910B4
+  resourceMemoryName: huawei.com/Ascend910B4-memory
+  memoryAllocatable: 32768
+  memoryCapacity: 32768
+  aiCore: 20
+  aiCPU: 7
+  templates:
+    - name: vir05_1c_8g
+      memory: 8192
+      aiCore: 5
+      aiCPU: 1
+    - name: vir10_3c_16g
+      memory: 16384
+      aiCore: 10
+      aiCPU: 3
 - chipName: 310P3
-
   commonWord: Ascend310P
   resourceName: huawei.com/Ascend310P
   resourceMemoryName: huawei.com/Ascend310P-memory
@@ -49,23 +140,6 @@ vnpus:
       memory: 12288
       aiCore: 4
       aiCPU: 4
-- chipName: 910B3
-  commonWord: Ascend910B3
-  resourceName: huawei.com/Ascend910B3
-  resourceMemoryName: huawei.com/Ascend910B3-memory
-  memoryAllocatable: 65536
-  memoryCapacity: 65536
-  aiCore: 20
-  aiCPU: 7
-  templates:
-    - name: vir05_1c_16g
-      memory: 16384
-      aiCore: 5
-      aiCPU: 1
-    - name: vir10_3c_32g
-      memory: 32768
-      aiCore: 10
-      aiCPU: 3
 nvidia:
   resourceCountName: volcano.sh/vgpu-number
   resourceMemoryName: volcano.sh/vgpu-memory
@@ -112,7 +186,7 @@ func Test_trimMemory(t *testing.T) {
 	conf, err := yamlStringToConfig(config_yaml)
 	assert.Nil(t, err)
 	dev := AscendDevice{
-		config: conf.VNPUs[0],
+		config: conf.VNPUs[len(conf.VNPUs)-1],
 	}
 	tests := []struct {
 		name     string
@@ -147,6 +221,7 @@ func Test_trimMemory(t *testing.T) {
 func Test_fit(t *testing.T) {
 	conf, err := yamlStringToConfig(config_yaml)
 	assert.Nil(t, err)
+	ascend310PConfig := conf.VNPUs[len(conf.VNPUs)-1]
 	device_info := &devices.DeviceInfo{
 		ID:      "68496E64-20E05477-92C31323-6E78030A-BD003019",
 		Index:   0,
@@ -168,7 +243,7 @@ func Test_fit(t *testing.T) {
 				Memreq: 1024,
 			},
 			&AscendDevice{
-				config:     conf.VNPUs[0],
+				config:     ascend310PConfig,
 				DeviceInfo: device_info,
 				DeviceUsage: &devices.DeviceUsage{
 					Used:    1,
@@ -185,7 +260,7 @@ func Test_fit(t *testing.T) {
 				Memreq: 21527,
 			},
 			&AscendDevice{
-				config:     conf.VNPUs[0],
+				config:     ascend310PConfig,
 				DeviceInfo: device_info,
 				DeviceUsage: &devices.DeviceUsage{
 					Used:    1,
@@ -202,7 +277,7 @@ func Test_fit(t *testing.T) {
 				Memreq: 6144,
 			},
 			&AscendDevice{
-				config:     conf.VNPUs[0],
+				config:     ascend310PConfig,
 				DeviceInfo: device_info,
 				DeviceUsage: &devices.DeviceUsage{
 					Used:    1,
@@ -219,7 +294,7 @@ func Test_fit(t *testing.T) {
 				Memreq: 24576,
 			},
 			&AscendDevice{
-				config:     conf.VNPUs[0],
+				config:     ascend310PConfig,
 				DeviceInfo: device_info,
 				DeviceUsage: &devices.DeviceUsage{
 					Used:    0,
@@ -237,7 +312,7 @@ func Test_fit(t *testing.T) {
 				Coresreq: 4,
 			},
 			&AscendDevice{
-				config:     conf.VNPUs[0],
+				config:     ascend310PConfig,
 				DeviceInfo: device_info,
 				DeviceUsage: &devices.DeviceUsage{
 					Used:      1,
