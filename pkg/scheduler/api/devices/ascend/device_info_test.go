@@ -18,10 +18,10 @@ package ascend
 
 import (
 	"fmt"
-	"testing"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v2"
-        "volcano.sh/volcano/pkg/scheduler/api/devices"
+	"testing"
+	"volcano.sh/volcano/pkg/scheduler/api/devices"
 	"volcano.sh/volcano/pkg/scheduler/api/devices/config"
 )
 
@@ -100,12 +100,12 @@ nvidia:
 `
 
 func yamlStringToConfig(yamlStr string) (*config.Config, error) {
-    var config config.Config
-    err := yaml.Unmarshal([]byte(yamlStr), &config)
-    if err != nil {
-        return nil, fmt.Errorf("failed to unmarshal YAML: %v", err)
-    }
-    return &config, nil
+	var config config.Config
+	err := yaml.Unmarshal([]byte(yamlStr), &config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal YAML: %v", err)
+	}
+	return &config, nil
 }
 
 func Test_trimMemory(t *testing.T) {
@@ -115,9 +115,9 @@ func Test_trimMemory(t *testing.T) {
 		config: conf.VNPUs[0],
 	}
 	tests := []struct {
-		name      string
-		inputMem  int64
-		wantMem   int64
+		name     string
+		inputMem int64
+		wantMem  int64
 	}{
 		{"test1", 0, 3072},
 		{"test2", 1, 3072},
@@ -138,8 +138,8 @@ func Test_trimMemory(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		    got, _ := dev.trimMemory(tt.inputMem)
-		    assert.Equal(t, tt.wantMem, got)
+			got, _ := dev.trimMemory(tt.inputMem)
+			assert.Equal(t, tt.wantMem, got)
 		})
 	}
 }
@@ -148,30 +148,30 @@ func Test_fit(t *testing.T) {
 	conf, err := yamlStringToConfig(config_yaml)
 	assert.Nil(t, err)
 	device_info := &devices.DeviceInfo{
-		ID: "68496E64-20E05477-92C31323-6E78030A-BD003019",
-		Index: 0,
-		Count: 7,
+		ID:      "68496E64-20E05477-92C31323-6E78030A-BD003019",
+		Index:   0,
+		Count:   7,
 		Devcore: 8,
-		Devmem: 21527,
+		Devmem:  21527,
 	}
 	tests := []struct {
-		name      string
-		req       *devices.ContainerDeviceRequest
-		dev       *AscendDevice
-		result    bool
+		name   string
+		req    *devices.ContainerDeviceRequest
+		dev    *AscendDevice
+		result bool
 	}{
 		{
 			"test1",
-			&devices.ContainerDeviceRequest {
-				Nums: 1,
-				Type: "Ascend310P",
+			&devices.ContainerDeviceRequest{
+				Nums:   1,
+				Type:   "Ascend310P",
 				Memreq: 1024,
 			},
-			&AscendDevice {
-				config: conf.VNPUs[0],
+			&AscendDevice{
+				config:     conf.VNPUs[0],
 				DeviceInfo: device_info,
 				DeviceUsage: &devices.DeviceUsage{
-					Used: 1,
+					Used:    1,
 					Usedmem: 3072,
 				},
 			},
@@ -179,16 +179,16 @@ func Test_fit(t *testing.T) {
 		},
 		{
 			"test2",
-			&devices.ContainerDeviceRequest {
-				Nums: 1,
-				Type: "Ascend310P",
+			&devices.ContainerDeviceRequest{
+				Nums:   1,
+				Type:   "Ascend310P",
 				Memreq: 21527,
 			},
-			&AscendDevice {
-				config: conf.VNPUs[0],
+			&AscendDevice{
+				config:     conf.VNPUs[0],
 				DeviceInfo: device_info,
 				DeviceUsage: &devices.DeviceUsage{
-					Used: 1,
+					Used:    1,
 					Usedmem: 3072,
 				},
 			},
@@ -196,16 +196,16 @@ func Test_fit(t *testing.T) {
 		},
 		{
 			"test3",
-			&devices.ContainerDeviceRequest {
-				Nums: 1,
-				Type: "Ascend310P",
+			&devices.ContainerDeviceRequest{
+				Nums:   1,
+				Type:   "Ascend310P",
 				Memreq: 6144,
 			},
-			&AscendDevice {
-				config: conf.VNPUs[0],
+			&AscendDevice{
+				config:     conf.VNPUs[0],
 				DeviceInfo: device_info,
 				DeviceUsage: &devices.DeviceUsage{
-					Used: 1,
+					Used:    1,
 					Usedmem: 12288,
 				},
 			},
@@ -213,16 +213,16 @@ func Test_fit(t *testing.T) {
 		},
 		{
 			"test4",
-			&devices.ContainerDeviceRequest {
-				Nums: 1,
-				Type: "Ascend310P",
+			&devices.ContainerDeviceRequest{
+				Nums:   1,
+				Type:   "Ascend310P",
 				Memreq: 24576,
 			},
-			&AscendDevice {
-				config: conf.VNPUs[0],
+			&AscendDevice{
+				config:     conf.VNPUs[0],
 				DeviceInfo: device_info,
 				DeviceUsage: &devices.DeviceUsage{
-					Used: 0,
+					Used:    0,
 					Usedmem: 0,
 				},
 			},
@@ -230,18 +230,18 @@ func Test_fit(t *testing.T) {
 		},
 		{
 			"test5_core",
-			&devices.ContainerDeviceRequest {
-				Nums: 1,
-				Type: "Ascend310P",
-				Memreq: 6144,
+			&devices.ContainerDeviceRequest{
+				Nums:     1,
+				Type:     "Ascend310P",
+				Memreq:   6144,
 				Coresreq: 4,
 			},
-			&AscendDevice {
-				config: conf.VNPUs[0],
+			&AscendDevice{
+				config:     conf.VNPUs[0],
 				DeviceInfo: device_info,
 				DeviceUsage: &devices.DeviceUsage{
-					Used: 1,
-					Usedmem: 12288,
+					Used:      1,
+					Usedmem:   12288,
 					Usedcores: 6,
 				},
 			},
@@ -250,8 +250,8 @@ func Test_fit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-		    ret := fit(tt.req, tt.dev)
-		    assert.Equal(t, tt.result, ret)
+			ret := fit(tt.req, tt.dev)
+			assert.Equal(t, tt.result, ret)
 		})
 	}
 }
