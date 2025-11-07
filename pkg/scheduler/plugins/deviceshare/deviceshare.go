@@ -116,7 +116,7 @@ func registerDevices() {
 	once.Do(func() {
 		if ascend.AscendVNPUEnable {
 			for _, vnpu := range config.GetConfig().VNPUs {
-				klog.Infof("register device %s", vnpu.CommonWord)
+				klog.V(3).Infof("register device %s", vnpu.CommonWord)
 				api.RegisterDevice(vnpu.CommonWord)
 			}
 		}
