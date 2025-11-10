@@ -69,7 +69,7 @@ Wait for @JackyTYang to fill
 ##### Deploy `hami-scheduler-device` config map
 
 ```
-kubectl apply -f https://raw.githubusercontent.com/Project-HAMi/ascend-device-plugin/refs/heads/main/hami-scheduler-device.yaml
+kubectl apply -f https://raw.githubusercontent.com/Project-HAMi/ascend-device-plugin/refs/heads/main/ascend-device-configmap.yaml
 ```
 
 ##### Deploy ascend-device-plugin
