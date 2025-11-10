@@ -48,8 +48,8 @@ const (
 
 	VGPUEnable = "deviceshare.VGPUEnable"
 
-	ASCEND310PvGPU       = "deviceshare.AscendMindClusterVNPUEnable"
-	AscendHAMiVNPUEnable = "deviceshare.AscendHAMiVNPUEnable"
+	AscendMindClusterVNPU = "deviceshare.AscendMindClusterVNPUEnable"
+	AscendHAMiVNPUEnable  = "deviceshare.AscendHAMiVNPUEnable"
 
 	SchedulePolicyArgument = "deviceshare.SchedulePolicy"
 	ScheduleWeight         = "deviceshare.ScheduleWeight"
@@ -88,7 +88,7 @@ func enablePredicate(dsp *deviceSharePlugin) {
 	args.GetBool(&gpushare.GpuNumberEnable, GPUNumberPredicate)
 	args.GetBool(&nodeLockEnable, NodeLockEnable)
 	args.GetBool(&vgpu.VGPUEnable, VGPUEnable)
-	args.GetBool(&vnpu.AscendMindClusterVNPUEnable, ASCEND310PvGPU)
+	args.GetBool(&vnpu.AscendMindClusterVNPUEnable, AscendMindClusterVNPU)
 	args.GetBool(&ascend.AscendHAMiVNPUEnable, AscendHAMiVNPUEnable)
 
 	gpushare.NodeLockEnable = nodeLockEnable
