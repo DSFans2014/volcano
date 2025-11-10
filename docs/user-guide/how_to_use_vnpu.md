@@ -9,9 +9,11 @@ Volcano supports **two vNPU modes** for sharing Ascend devices:
 ### 1. Mindcluster mode
 
 **Description**:
+
 MindCluster, formerly known as [Ascend/ascend-device-plugin](https://gitee.com/ascend/ascend-device-plugin) is an official device plugin, which supports npu cluster for all Ascend series and vnpu feature for Ascend 310 series. 
 
 **Use case**:
+
 NPU cluster for Ascend 910 series
 NPU and vNPU cluster for Ascend 310 series 
 
@@ -20,9 +22,11 @@ NPU and vNPU cluster for Ascend 310 series
 ### 2. HAMi mode
 
 **Description**:
+
 This mode is developed by a third-party community 'HAMi', which is the developer of [volcano-vgpu](./how_to_use_volcano_vgpu.md) feature, It supports vNPU feature for both Ascend 310 and Ascend 910. It also support managing heterogeneous Ascend cluster(Cluster with multiple Ascend types,i.e 910A,910B2,910B3,310p)
 
 **Use case**:
+
 NPU and vNPU cluster for Ascend 910 series
 NPU and vNPU cluster for Ascend 310 series 
 Heterogeneous Ascend cluster
@@ -62,13 +66,13 @@ Wait for @JackyTYang to fill
 
 #### HAMi mode
 
-#### Deploy `hami-scheduler-device` config map
+##### Deploy `hami-scheduler-device` config map
 
 ```
 kubectl apply -f https://raw.githubusercontent.com/Project-HAMi/ascend-device-plugin/refs/heads/main/hami-scheduler-device.yaml
 ```
 
-#### Deploy ascend-device-plugin
+##### Deploy ascend-device-plugin
 
 ```
 kubectl apply -f https://raw.githubusercontent.com/Project-HAMi/ascend-device-plugin/refs/heads/main/ascend-device-plugin.yaml
@@ -76,7 +80,7 @@ kubectl apply -f https://raw.githubusercontent.com/Project-HAMi/ascend-device-pl
 
 refer https://github.com/Project-HAMi/ascend-device-plugin
 
-### Scheduler Config Update
+##### Scheduler Config Update
 ```yaml
 kind: ConfigMap
 apiVersion: v1
