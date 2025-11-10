@@ -74,3 +74,14 @@ spec:
           huawei.com/Ascend310P-memory: "4096"
 
 ```
+
+The supported Ascend chips are shown in the following table:
+
+| ChipName | ResourceName | ResourceMemoryName |
+|-------|-------|-------|
+| 910A | huawei.com/Ascend910A | huawei.com/Ascend910A-memory |
+| 910B2 | huawei.com/Ascend910B2 | huawei.com/Ascend910B2-memory |
+| 910B3 | huawei.com/Ascend910B3 | huawei.com/Ascend910B3-memory |
+| 910B4 | huawei.com/Ascend910B4 | huawei.com/Ascend910B4-memory |
+| 910B4-1 | huawei.com/Ascend910B4-1 | huawei.com/Ascend910B4-1-memory |
+| 310P3 | huawei.com/Ascend310P | huawei.com/Ascend310P-memory |
