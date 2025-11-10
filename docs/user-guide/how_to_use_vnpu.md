@@ -14,7 +14,7 @@ MindCluster, formerly known as [Ascend/ascend-device-plugin](https://gitee.com/a
 
 **Use case**:
 
-NPU cluster for Ascend 910 series
+NPU cluster for Ascend 910 series  
 NPU and vNPU cluster for Ascend 310 series 
 
 ---
@@ -27,8 +27,8 @@ This mode is developed by a third-party community 'HAMi', which is the developer
 
 **Use case**:
 
-NPU and vNPU cluster for Ascend 910 series
-NPU and vNPU cluster for Ascend 310 series 
+NPU and vNPU cluster for Ascend 910 series  
+NPU and vNPU cluster for Ascend 310 series  
 Heterogeneous Ascend cluster
 
 ---
