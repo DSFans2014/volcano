@@ -9,7 +9,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-var Ascend310pvNPUEnable bool
+var AscendMindClusterVNPUEnable bool
 
 const (
 	DeviceName = "ascend310p-vNPU"

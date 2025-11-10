@@ -71,8 +71,8 @@ type RuntimeInfo struct {
 }
 
 var (
-	AscendVNPUEnable bool
-	NodeLockEnable   bool
+	AscendHAMiVNPUEnable bool
+	NodeLockEnable       bool
 )
 
 func NewAscendDevices(name string, node *v1.Node) map[string]*AscendDevices {
@@ -202,7 +202,7 @@ func (ads *AscendDevices) AddQueueResource(pod *v1.Pod) map[string]float64 {
 }
 
 func (ads *AscendDevices) HasDeviceRequest(pod *v1.Pod) bool {
-	if !AscendVNPUEnable {
+	if !AscendHAMiVNPUEnable {
 		return false
 	}
 	randDev, err := ads.getFirstDevice()
@@ -547,7 +547,7 @@ func InitDevices(config []config.VNPUConfig) []*AscendDevice {
 }
 
 func ParseConfig(fs *flag.FlagSet) {
-	fs.BoolVar(&AscendVNPUEnable, "AscendVNPUEnable", false, "enable ascend device")
+	fs.BoolVar(&AscendHAMiVNPUEnable, "AscendHAMiVNPUEnable", false, "enable ascend device")
 }
 
 func (dev *AscendDevice) CommonWord() string {
@@ -565,7 +565,7 @@ func (dev *AscendDevice) GetNodeDevices(n v1.Node) ([]*devices.DeviceInfo, error
 		return []*devices.DeviceInfo{}, err
 	}
 	if len(nodeDevices) == 0 {
-		klog.InfoS("no gpu device found", "node", n.Name, "device annotation", anno)
+		klog.InfoS("no ascend device found", "node", n.Name, "device annotation", anno)
 		return []*devices.DeviceInfo{}, errors.New("no device found on node")
 	}
 	return nodeDevices, nil

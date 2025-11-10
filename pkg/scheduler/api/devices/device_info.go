@@ -179,7 +179,7 @@ func DecodePodDevices(checklist map[string]string, annos map[string]string) (Pod
 		for _, s := range strings.Split(str, OnePodMultiContainerSplitSymbol) {
 			cd, err := DecodeContainerDevices(s)
 			if err != nil {
-				return PodDevices{}, nil
+				return PodDevices{}, err
 			}
 			if len(cd) == 0 {
 				continue

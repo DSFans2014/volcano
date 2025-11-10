@@ -48,8 +48,8 @@ const (
 
 	VGPUEnable = "deviceshare.VGPUEnable"
 
-	ASCEND310PvGPU   = "deviceshare.ASCEND310PVNPUEnable"
-	AscendVNPUEnable = "deviceshare.AscendVNPUEnable"
+	ASCEND310PvGPU       = "deviceshare.AscendMindClusterVNPUEnable"
+	AscendHAMiVNPUEnable = "deviceshare.AscendHAMiVNPUEnable"
 
 	SchedulePolicyArgument = "deviceshare.SchedulePolicy"
 	ScheduleWeight         = "deviceshare.ScheduleWeight"
@@ -88,8 +88,8 @@ func enablePredicate(dsp *deviceSharePlugin) {
 	args.GetBool(&gpushare.GpuNumberEnable, GPUNumberPredicate)
 	args.GetBool(&nodeLockEnable, NodeLockEnable)
 	args.GetBool(&vgpu.VGPUEnable, VGPUEnable)
-	args.GetBool(&vnpu.Ascend310pvNPUEnable, ASCEND310PvGPU)
-	args.GetBool(&ascend.AscendVNPUEnable, AscendVNPUEnable)
+	args.GetBool(&vnpu.AscendMindClusterVNPUEnable, ASCEND310PvGPU)
+	args.GetBool(&ascend.AscendHAMiVNPUEnable, AscendHAMiVNPUEnable)
 
 	gpushare.NodeLockEnable = nodeLockEnable
 	vgpu.NodeLockEnable = nodeLockEnable
@@ -114,7 +114,7 @@ func enablePredicate(dsp *deviceSharePlugin) {
 
 func registerDevices() {
 	once.Do(func() {
-		if ascend.AscendVNPUEnable {
+		if ascend.AscendHAMiVNPUEnable {
 			for _, vnpu := range config.GetConfig().VNPUs {
 				klog.V(3).Infof("register device %s", vnpu.CommonWord)
 				api.RegisterDevice(vnpu.CommonWord)
@@ -185,7 +185,7 @@ func initializeDevicesWithSession(ssn *framework.Session) {
 func initializeDevice(device api.Devices, ssn *framework.Session, nodeInfo *api.NodeInfo) error {
 	switch d := device.(type) {
 	case *vnpu.NPUDevices:
-		if vnpu.Ascend310pvNPUEnable {
+		if vnpu.AscendMindClusterVNPUEnable {
 			klog.V(3).Infof("initialize ascend310p device.")
 			return vnpu310p.InitVNPUDevice(d, ssn, nodeInfo)
 		}
@@ -213,7 +213,7 @@ func (dp *deviceSharePlugin) OnSessionOpen(ssn *framework.Session) {
 						})
 						return api.NewFitErrWithStatus(task, node, predicateStatus...)
 					}
-					klog.V(4).Infof("pod %s/%s did not request device %s on %s, skipping it", task.Pod.Namespace, task.Pod.Name, val, node.Name)
+					klog.V(4).Infof("device %s is null, skipping it", val)
 					continue
 				}
 				if !dev.HasDeviceRequest(task.Pod) {

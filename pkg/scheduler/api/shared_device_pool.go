@@ -88,6 +88,11 @@ var RegisteredDevices = []string{
 }
 
 func RegisterDevice(deviceName string) {
+	for _, name := range RegisteredDevices {
+		if name == deviceName {
+			return
+		}
+	}
 	RegisteredDevices = append(RegisteredDevices, deviceName)
 }
 
