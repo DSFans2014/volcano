@@ -138,7 +138,7 @@ spec:
 
 ```
 
-The supported Ascend chips and their resouruceNames are shown in the following table:
+The supported Ascend chips and their `ResourceNames` are shown in the following table:
 
 | ChipName | ResourceName | ResourceMemoryName |
 |-------|-------|-------|
