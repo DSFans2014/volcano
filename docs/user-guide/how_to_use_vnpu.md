@@ -1,4 +1,4 @@
-# HAMi ascend-device-plugin User Guide
+# Ascend vNPU User Guide
 
 ## Introduction
 
