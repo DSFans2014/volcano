@@ -115,6 +115,12 @@ data:
 
 #### HAMi mode
 
+##### Label the Node with `ascend=on`
+
+```
+kubectl label node {ascend-node} ascend=on
+```
+
 ##### Deploy `hami-scheduler-device` config map
 
 ```
@@ -127,7 +133,7 @@ kubectl apply -f https://raw.githubusercontent.com/Project-HAMi/ascend-device-pl
 kubectl apply -f https://raw.githubusercontent.com/Project-HAMi/ascend-device-plugin/refs/heads/main/ascend-device-plugin.yaml
 ```
 
-refer https://github.com/Project-HAMi/ascend-device-plugin
+For more information, refer to the [ascend-device-plugin documentation](https://github.com/Project-HAMi/ascend-device-plugin).
 
 ##### Scheduler Config Update
 ```yaml
