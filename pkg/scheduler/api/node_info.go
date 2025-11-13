@@ -27,8 +27,8 @@ import (
 
 	"volcano.sh/apis/pkg/apis/scheduling"
 	"volcano.sh/apis/pkg/apis/scheduling/v1beta1"
-	"volcano.sh/volcano/pkg/scheduler/api/devices/ascend"
-	"volcano.sh/volcano/pkg/scheduler/api/devices/ascend/ascend310p/vnpu"
+	"volcano.sh/volcano/pkg/scheduler/api/devices/ascend/hami"
+	"volcano.sh/volcano/pkg/scheduler/api/devices/ascend/mindcluster/ascend310p/vnpu"
 	"volcano.sh/volcano/pkg/scheduler/api/devices/nvidia/gpushare"
 	"volcano.sh/volcano/pkg/scheduler/api/devices/nvidia/vgpu"
 )
