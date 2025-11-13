@@ -6,13 +6,13 @@ Volcano supports **two vNPU modes** for sharing Ascend devices:
 
 ---
 
-### 1. Mindcluster mode
+### 1. MindCluster mode
 
 **Description**:
 
 The initial version of [MindCluster](https://gitcode.com/Ascend/mind-cluster)—the official Ascend cluster scheduling add-on—required custom modifications and recompilation of Volcano. Furthermore, it was limited to Volcano release1.7 and release1.9, which complicated its use and restricted access to newer Volcano features.
 
-To address this, we have integrated its core scheduling logic for Ascend vNPU into Volcano's native device-share plugin，which is designed specifically for scheduling and sharing heterogeneous resources like GPUs and NPUs. This integration provides seamless access to vNPU capabilities through the procedure below, while maintaining full compatibility with the latest Volcano features.
+To address this, we have integrated its core scheduling logic for Ascend vNPU into Volcano's native device-share plugin, which is designed specifically for scheduling and sharing heterogeneous resources like GPUs and NPUs. This integration provides seamless access to vNPU capabilities through the procedure below, while maintaining full compatibility with the latest Volcano features.
 
 **Use case**:
 
@@ -25,7 +25,7 @@ with support for more chip types to come
 
 **Description**:
 
-This mode is developed by a third-party community 'HAMi', which is the developer of [volcano-vgpu](./how_to_use_volcano_vgpu.md) feature, It supports vNPU feature for both Ascend 310 and Ascend 910. It also support managing heterogeneous Ascend cluster(Cluster with multiple Ascend types,i.e 910A,910B2,910B3,310p)
+This mode is developed by a third-party community 'HAMi', which is the developer of [volcano-vgpu](./how_to_use_volcano_vgpu.md) feature. It supports vNPU feature for both Ascend 310 and Ascend 910. It also supports managing heterogeneous Ascend cluster(Cluster with multiple Ascend types, i.e. 910A,910B2,910B3,310P)
 
 **Use case**:
 
@@ -44,7 +44,7 @@ To enable vNPU scheduling, the following components must be set up based on the 
 
 Kubernetes >= 1.16  
 Volcano >= 1.14  
-[ascend-docker-runtime](https://gitcode.com/Ascend/mind-cluster/tree/master/component/ascend-docker-runtime) (for HAMi Mode) 
+[ascend-docker-runtime](https://gitcode.com/Ascend/mind-cluster/tree/master/component/ascend-docker-runtime) (for HAMi Mode)
 
 ### Install Volcano:
 
@@ -73,7 +73,7 @@ Follow the official [Ascend documentation](https://www.hiascend.com/document/det
 
 **Configuration Adjustment for Ascend Device Plugin:**
 
-When installing `ascend-device-plugin`, you must set the `presetVirtualDevice` parameter to `"false"` in the `device-plugin-310P-volcano-v{version}.yaml` file to enable dynamic virtualization of 310p:
+When installing `ascend-device-plugin`, you must set the `presetVirtualDevice` parameter to `"false"` in the `device-plugin-310P-volcano-v{version}.yaml` file to enable dynamic virtualization of 310P:
 
 ```yaml
 ...
@@ -108,7 +108,7 @@ data:
     configurations:
     ...
     - name: init-params
-      arguments: {"grace-over-time":"900","presetVirtualDevice":"false"}  # to enable dynamic virtulization，presetVirtualDevice need to be set false
+      arguments: {"grace-over-time":"900","presetVirtualDevice":"false"}  # to enable dynamic virtulization, presetVirtualDevice need to be set false
 ```
 
 ---
@@ -121,7 +121,7 @@ data:
 kubectl label node {ascend-node} ascend=on
 ```
 
-##### Deploy `hami-scheduler-device` config map
+##### Deploy `hami-scheduler-device` ConfigMap
 
 ```
 kubectl apply -f https://raw.githubusercontent.com/Project-HAMi/ascend-device-plugin/refs/heads/main/ascend-device-configmap.yaml
@@ -156,7 +156,7 @@ data:
           deviceshare.KnownGeometriesCMName: hami-scheduler-device
 ```
 
-  **Note:** You may noticed that, 'volcano-vgpu' has its own GeometriesCMName and GeometriesCMNamespace, which means if you want to use both vNPU and vGPU in a same volcano cluster, you need to merge the configMap from both sides and set it here.
+  **Note:** You may notice that, 'volcano-vgpu' has its own GeometriesCMName and GeometriesCMNamespace, which means if you want to use both vNPU and vGPU in a same volcano cluster, you need to merge the configMap from both sides and set it here.
 
 ## Usage
 
@@ -252,7 +252,7 @@ The supported Ascend chips and their `ResourceNames` are shown in the following 
 
 **Notice**
 
-For **chip virtualization (non–full card usage)**, the value of `vnpu-dvpp` must strictly match the corresponding value listed in the above table.
+For **chip virtualization (non-full card usage)**, the value of `vnpu-dvpp` must strictly match the corresponding value listed in the above table.
 Any other values will cause the task to fail to be dispatched.
 
 

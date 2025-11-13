@@ -36,7 +36,6 @@ import (
 )
 
 const (
-	NodeLockAscend         = "hami.io/mutex.lock"
 	Ascend910Prefix        = "Ascend910"
 	Ascend910NetworkWeight = 10
 	// binpack means the lower device memory remained after this allocation, the better
