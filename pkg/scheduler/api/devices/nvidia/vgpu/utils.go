@@ -330,12 +330,12 @@ func checkNodeGPUSharingPredicateAndScore(pod *v1.Pod, gssnap *GPUDevices, repli
 			if val.MemPercentagereq != 101 {
 				memreqForCard = uint(float64(gs.Device[i].Memory) * float64(val.MemPercentagereq) / 100.0)
 			} else {
-				memreqForCard = val.Memreq
+				memreqForCard = uint(val.Memreq)
 			}
 			if int(gs.Device[i].Memory)-int(gs.Device[i].UsedMem) < int(memreqForCard) {
 				continue
 			}
-			if gs.Device[i].UsedCore+val.Coresreq > 100 {
+			if gs.Device[i].UsedCore+uint(val.Coresreq) > 100 {
 				continue
 			}
 			// Coresreq=100 indicates it want this card exclusively
@@ -364,7 +364,7 @@ func checkNodeGPUSharingPredicateAndScore(pod *v1.Pod, gssnap *GPUDevices, repli
 					UUID:      uuid,
 					Type:      val.Type,
 					Usedmem:   memreqForCard,
-					Usedcores: val.Coresreq,
+					Usedcores: uint(val.Coresreq),
 				})
 				score += GPUScore(schedulePolicy, gs.Device[i])
 			}
