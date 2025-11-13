@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package ascend
+package hami
 
 import (
 	"encoding/json"
@@ -287,7 +287,7 @@ func (ads *AscendDevices) Allocate(kubeClient kubernetes.Interface, pod *v1.Pod)
 		nodelock.UseClient(kubeClient)
 		err := nodelock.LockNode(ads.NodeName, ads.Type)
 		if err != nil {
-			return errors.Errorf("node %s locked for %s hamivgpu lockname %s", ads.NodeName, pod.Name, err.Error())
+			return errors.Errorf("node %s locked for %s hami vnpu. lockname %s", ads.NodeName, pod.Name, err.Error())
 		}
 	}
 	podDevs, err := ads.selectDevices(pod, ads.Policy)
@@ -525,18 +525,18 @@ func InitDevices(config []config.VNPUConfig) []*AscendDevice {
 		commonWord := vnpu.CommonWord
 		dev := &AscendDevice{
 			config:           vnpu,
-			nodeRegisterAnno: fmt.Sprintf("hami.io/node-register-%s", commonWord),
-			useUUIDAnno:      fmt.Sprintf("hami.io/use-%s-uuid", commonWord),
-			noUseUUIDAnno:    fmt.Sprintf("hami.io/no-use-%s-uuid", commonWord),
-			handshakeAnno:    fmt.Sprintf("hami.io/node-handshake-%s", commonWord),
+			nodeRegisterAnno: fmt.Sprintf("%s/node-register-%s", devices.HAMiAnnotationsPrefix, commonWord),
+			useUUIDAnno:      fmt.Sprintf("%s/use-%s-uuid", devices.HAMiAnnotationsPrefix, commonWord),
+			noUseUUIDAnno:    fmt.Sprintf("%s/no-use-%s-uuid", devices.HAMiAnnotationsPrefix, commonWord),
+			handshakeAnno:    fmt.Sprintf("%s/node-handshake-%s", devices.HAMiAnnotationsPrefix, commonWord),
 		}
 		sort.Slice(dev.config.Templates, func(i, j int) bool {
 			return dev.config.Templates[i].Memory < dev.config.Templates[j].Memory
 		})
 		_, ok := devices.InRequestDevices[commonWord]
 		if !ok {
-			devices.InRequestDevices[commonWord] = fmt.Sprintf("hami.io/%s-devices-to-allocate", commonWord)
-			devices.SupportDevices[commonWord] = fmt.Sprintf("hami.io/%s-devices-allocated", commonWord)
+			devices.InRequestDevices[commonWord] = fmt.Sprintf("%s/%s-devices-to-allocate", devices.HAMiAnnotationsPrefix, commonWord)
+			devices.SupportDevices[commonWord] = fmt.Sprintf("%s/%s-devices-allocated", devices.HAMiAnnotationsPrefix, commonWord)
 			// util.HandshakeAnnos[commonWord] = dev.handshakeAnno
 		}
 		devs = append(devs, dev)

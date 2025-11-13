@@ -352,7 +352,7 @@ func (ni *NodeInfo) setNodeOthersResource(node *v1.Node) {
 	ni.Others[vgpu.DeviceName] = vgpu.NewGPUDevices(ni.Name, node)
 	ni.Others[vnpu.DeviceName] = vnpu.NewNPUDevices(ni.Name, node)
 	ascend_ignored_list := []string{}
-	for device_name, devices := range ascend.NewAscendDevices(ni.Name, node) {
+	for device_name, devices := range hami.NewAscendDevices(ni.Name, node) {
 		ni.Others[device_name] = devices
 		ascend_ignored_list = append(ascend_ignored_list, devices.GetIgnoredDevices()...)
 	}
@@ -514,7 +514,7 @@ func (ni *NodeInfo) addResource(pod *v1.Pod) {
 	}
 	ni.Others[vgpu.DeviceName].(Devices).AddResource(pod)
 	ni.Others[vnpu.DeviceName].(Devices).AddResource(pod)
-	for _, name := range ascend.GetAscendDeviceNames() {
+	for _, name := range hami.GetAscendDeviceNames() {
 		if other, exists := ni.Others[name]; exists {
 			if devices, ok := other.(Devices); ok {
 				devices.AddResource(pod)
@@ -530,7 +530,7 @@ func (ni *NodeInfo) subResource(pod *v1.Pod) {
 	}
 	ni.Others[vgpu.DeviceName].(Devices).SubResource(pod)
 	ni.Others[vnpu.DeviceName].(Devices).SubResource(pod)
-	for _, name := range ascend.GetAscendDeviceNames() {
+	for _, name := range hami.GetAscendDeviceNames() {
 		if other, exists := ni.Others[name]; exists {
 			if devices, ok := other.(Devices); ok {
 				devices.SubResource(pod)

@@ -29,7 +29,7 @@ import (
 
 	"volcano.sh/volcano/pkg/scheduler/api"
 	"volcano.sh/volcano/pkg/scheduler/api/devices"
-	ascend "volcano.sh/volcano/pkg/scheduler/api/devices/ascend/hami"
+	"volcano.sh/volcano/pkg/scheduler/api/devices/ascend/hami"
 	"volcano.sh/volcano/pkg/scheduler/api/devices/ascend/mindcluster/ascend310p/vnpu"
 	"volcano.sh/volcano/pkg/scheduler/api/devices/config"
 	"volcano.sh/volcano/pkg/scheduler/api/devices/nvidia/gpushare"
@@ -89,7 +89,7 @@ func enablePredicate(dsp *deviceSharePlugin) {
 	args.GetBool(&nodeLockEnable, NodeLockEnable)
 	args.GetBool(&vgpu.VGPUEnable, VGPUEnable)
 	args.GetBool(&vnpu.AscendMindClusterVNPUEnable, AscendMindClusterVNPU)
-	args.GetBool(&ascend.AscendHAMiVNPUEnable, AscendHAMiVNPUEnable)
+	args.GetBool(&hami.AscendHAMiVNPUEnable, AscendHAMiVNPUEnable)
 
 	gpushare.NodeLockEnable = nodeLockEnable
 	vgpu.NodeLockEnable = nodeLockEnable
@@ -114,7 +114,7 @@ func enablePredicate(dsp *deviceSharePlugin) {
 
 func registerDevices() {
 	once.Do(func() {
-		if ascend.AscendHAMiVNPUEnable {
+		if hami.AscendHAMiVNPUEnable {
 			for _, vnpu := range config.GetConfig().VNPUs {
 				klog.V(3).Infof("register device %s", vnpu.CommonWord)
 				api.RegisterDevice(vnpu.CommonWord)

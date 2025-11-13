@@ -79,7 +79,7 @@ type Devices interface {
 var _ Devices = new(gpushare.GPUDevices)
 var _ Devices = new(vgpu.GPUDevices)
 var _ Devices = new(vnpu.NPUDevices)
-var _ Devices = new(ascend.AscendDevices)
+var _ Devices = new(hami.AscendDevices)
 
 var RegisteredDevices = []string{
 	gpushare.DeviceName,
