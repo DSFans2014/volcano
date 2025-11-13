@@ -176,3 +176,76 @@ func PatchNodeAnnotations(node *v1.Node, annotations map[string]string) error {
 	}
 	return err
 }
+
+func ExtractResourceRequest(pod *v1.Pod, resourceType, countName, memoryName, percentageName, coreName string) []ContainerDeviceRequest {
+	resourceName := v1.ResourceName(countName)
+	resourceMem := v1.ResourceName(memoryName)
+	counts := []ContainerDeviceRequest{}
+
+	//Count Nvidia GPU
+	for i := 0; i < len(pod.Spec.Containers); i++ {
+		singledevice := false
+		v, ok := pod.Spec.Containers[i].Resources.Limits[resourceName]
+		if !ok {
+			v, ok = pod.Spec.Containers[i].Resources.Limits[resourceMem]
+			singledevice = true
+		}
+		if ok {
+			n := int64(1)
+			if !singledevice {
+				n, _ = v.AsInt64()
+			}
+			memnum := int32(0)
+			mem, ok := pod.Spec.Containers[i].Resources.Limits[resourceMem]
+			if !ok {
+				mem, ok = pod.Spec.Containers[i].Resources.Requests[resourceMem]
+			}
+			if ok {
+				memnums, ok := mem.AsInt64()
+				if ok {
+					memnum = int32(memnums)
+				}
+			}
+			mempnum := int32(101)
+			if percentageName != "" {
+				resourceMemPercentage := v1.ResourceName(percentageName)
+				mem, ok = pod.Spec.Containers[i].Resources.Limits[resourceMemPercentage]
+				if !ok {
+					mem, ok = pod.Spec.Containers[i].Resources.Requests[resourceMemPercentage]
+				}
+				if ok {
+					mempnums, ok := mem.AsInt64()
+					if ok {
+						mempnum = int32(mempnums)
+					}
+				}
+				if mempnum == 101 && memnum == 0 {
+					mempnum = 100
+				}
+			}
+			corenum := int32(0)
+			if coreName != "" {
+				resourceCores := v1.ResourceName(coreName)
+				core, ok := pod.Spec.Containers[i].Resources.Limits[resourceCores]
+				if !ok {
+					core, ok = pod.Spec.Containers[i].Resources.Requests[resourceCores]
+				}
+				if ok {
+					corenums, ok := core.AsInt64()
+					if ok {
+						corenum = int32(corenums)
+					}
+				}
+			}
+			counts = append(counts, ContainerDeviceRequest{
+				Nums:             int32(n),
+				Type:             resourceType,
+				Memreq:           memnum,
+				MemPercentagereq: int32(mempnum),
+				Coresreq:         corenum,
+			})
+		}
+	}
+	klog.V(3).Infoln("counts=", counts)
+	return counts
+}

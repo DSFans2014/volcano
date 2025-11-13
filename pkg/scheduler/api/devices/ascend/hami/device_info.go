@@ -570,62 +570,18 @@ func (dev *AscendDevice) GetNodeDevices(n v1.Node) ([]*devices.DeviceInfo, error
 	return nodeDevices, nil
 }
 
-func (dev *AscendDevice) GenerateResourceRequests(ctr *v1.Container) devices.ContainerDeviceRequest {
-	ascendResourceCount := v1.ResourceName(dev.config.ResourceName)
-	ascendResourceMem := v1.ResourceName(dev.config.ResourceMemoryName)
-	v, ok := ctr.Resources.Limits[ascendResourceCount]
-	if !ok {
-		v, ok = ctr.Resources.Requests[ascendResourceCount]
-	}
-	if ok {
-		if n, ok := v.AsInt64(); ok {
-			memnum := 0
-			mem, ok := ctr.Resources.Limits[ascendResourceMem]
-			if !ok {
-				mem, ok = ctr.Resources.Requests[ascendResourceMem]
-			}
-			if ok {
-				memnums, ok := mem.AsInt64()
-				if ok {
-					m, _ := dev.trimMemory(memnums)
-					memnum = int(m)
-				}
-				klog.V(5).Infof("raw mem %d memnum %d", memnums, memnum)
-			}
-			corenum := int32(0)
-
-			mempnum := 0
-			if memnum == 0 {
-				mempnum = 100
-			}
-
-			if corenum > 100 {
-				klog.ErrorS(nil, "core limit can't exceed 100", "device", dev.config.CommonWord)
-				corenum = 100
-			}
-			if mempnum != 0 && memnum == 0 {
-				memnum = int(dev.DeviceInfo.Devmem) * mempnum / 100
-				klog.V(5).Infof("new memreq %d totalmem %d mempercentage %d", memnum, dev.DeviceInfo.Devmem, mempnum)
-			}
-
-			return devices.ContainerDeviceRequest{
-				Nums:             int32(n),
-				Type:             dev.CommonWord(),
-				Memreq:           int32(memnum),
-				MemPercentagereq: int32(mempnum),
-				Coresreq:         corenum,
-			}
-		}
-	}
-	return devices.ContainerDeviceRequest{}
-}
-
 func (dev *AscendDevice) ResourceReqs(pod *v1.Pod) []devices.ContainerDeviceRequest {
-	var reqs []devices.ContainerDeviceRequest
-	for _, ctr := range pod.Spec.Containers {
-		req := dev.GenerateResourceRequests(&ctr)
-		if req.Nums > 0 {
-			reqs = append(reqs, req)
+	reqs := devices.ExtractResourceRequest(pod, dev.CommonWord(), dev.config.ResourceName, dev.config.ResourceMemoryName, "", "")
+	for i := range reqs {
+		req := &reqs[i]
+		if req.Memreq == 0 && req.MemPercentagereq != 0 {
+			req.Memreq = int32(dev.DeviceInfo.Devmem * req.MemPercentagereq / 100)
+			klog.V(5).Infof("new memreq %d totalmem %d mempercentage %d", req.Memreq, dev.DeviceInfo.Devmem, req.MemPercentagereq)
+		}
+		if req.Memreq > 0 {
+			m, _ := dev.trimMemory(int64(req.Memreq))
+			klog.V(5).Infof("raw mem %d, trimed mem %d", req.Memreq, m)
+			req.Memreq = int32(m)
 		}
 	}
 	return reqs

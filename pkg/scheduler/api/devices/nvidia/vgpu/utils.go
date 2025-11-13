@@ -170,73 +170,12 @@ func checkVGPUResourcesInPod(pod *v1.Pod) bool {
 	return false
 }
 
-func resourcereqs(pod *v1.Pod) []ContainerDeviceRequest {
-	resourceName := v1.ResourceName(getConfig().ResourceCountName)
-	resourceMem := v1.ResourceName(getConfig().ResourceMemoryName)
-	resourceMemPercentage := v1.ResourceName(getConfig().ResourceMemoryPercentageName)
-	resourceCores := v1.ResourceName(getConfig().ResourceCoreName)
-	counts := []ContainerDeviceRequest{}
-
-	//Count Nvidia GPU
-	for i := 0; i < len(pod.Spec.Containers); i++ {
-		singledevice := false
-		v, ok := pod.Spec.Containers[i].Resources.Limits[resourceName]
-		if !ok {
-			v, ok = pod.Spec.Containers[i].Resources.Limits[resourceMem]
-			singledevice = true
-		}
-		if ok {
-			n := int64(1)
-			if !singledevice {
-				n, _ = v.AsInt64()
-			}
-			memnum := uint(0)
-			mem, ok := pod.Spec.Containers[i].Resources.Limits[resourceMem]
-			if !ok {
-				mem, ok = pod.Spec.Containers[i].Resources.Requests[resourceMem]
-			}
-			if ok {
-				memnums, ok := mem.AsInt64()
-				if ok {
-					memnum = uint(memnums)
-				}
-			}
-			mempnum := int32(101)
-			mem, ok = pod.Spec.Containers[i].Resources.Limits[resourceMemPercentage]
-			if !ok {
-				mem, ok = pod.Spec.Containers[i].Resources.Requests[resourceMemPercentage]
-			}
-			if ok {
-				mempnums, ok := mem.AsInt64()
-				if ok {
-					mempnum = int32(mempnums)
-				}
-			}
-			if mempnum == 101 && memnum == 0 {
-				mempnum = 100
-			}
-			corenum := uint(0)
-			core, ok := pod.Spec.Containers[i].Resources.Limits[resourceCores]
-			if !ok {
-				core, ok = pod.Spec.Containers[i].Resources.Requests[resourceCores]
-			}
-			if ok {
-				corenums, ok := core.AsInt64()
-				if ok {
-					corenum = uint(corenums)
-				}
-			}
-			counts = append(counts, ContainerDeviceRequest{
-				Nums:             int32(n),
-				Type:             "NVIDIA",
-				Memreq:           memnum,
-				MemPercentagereq: int32(mempnum),
-				Coresreq:         corenum,
-			})
-		}
-	}
-	klog.V(3).Infoln("counts=", counts)
-	return counts
+func resourcereqs(pod *v1.Pod) []devices.ContainerDeviceRequest {
+	countName := getConfig().ResourceCountName
+	memoryName := getConfig().ResourceMemoryName
+	percentageName := getConfig().ResourceMemoryPercentageName
+	coreName := getConfig().ResourceCoreName
+	return devices.ExtractResourceRequest(pod, "NVIDIA", countName, memoryName, percentageName, coreName)
 }
 
 func checkGPUtype(annos map[string]string, cardtype string) bool {
@@ -273,7 +212,7 @@ func checkGPUtype(annos map[string]string, cardtype string) bool {
 	return true
 }
 
-func checkType(annos map[string]string, d GPUDevice, n ContainerDeviceRequest) bool {
+func checkType(annos map[string]string, d GPUDevice, n devices.ContainerDeviceRequest) bool {
 	//General type check, NVIDIA->NVIDIA MLU->MLU
 	if !strings.Contains(d.Type, n.Type) {
 		return false
