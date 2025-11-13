@@ -68,7 +68,7 @@ const (
 )
 
 const (
-	HAMiAnnotationsPrefix = "hami.io"
+	HAMiAnnotationsPrefix   = "hami.io"
 	AssignedNodeAnnotations = "hami.io/vgpu-node"
 	AssignedTimeAnnotations = "hami.io/vgpu-time"
 	BindTimeAnnotations     = "hami.io/bind-time"
