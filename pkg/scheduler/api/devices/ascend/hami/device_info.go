@@ -307,10 +307,10 @@ func (ads *AscendDevices) Allocate(kubeClient kubernetes.Interface, pod *v1.Pod)
 	ads.PatchAnnotations(pod, &annotations, podDevs)
 
 	ads.addResource(annotations, pod)
-	annotations[devices.AssignedNodeAnnotations] = ads.NodeName
-	annotations[devices.AssignedTimeAnnotations] = strconv.FormatInt(time.Now().Unix(), 10)
-	annotations[devices.DeviceBindPhase] = "allocating"
-	annotations[devices.BindTimeAnnotations] = strconv.FormatInt(time.Now().Unix(), 10)
+	annotations[AssignedNodeAnnotations] = ads.NodeName
+	annotations[AssignedTimeAnnotations] = strconv.FormatInt(time.Now().Unix(), 10)
+	annotations[DeviceBindPhase] = "allocating"
+	annotations[BindTimeAnnotations] = strconv.FormatInt(time.Now().Unix(), 10)
 
 	err = devices.PatchPodAnnotations(kubeClient, pod, annotations)
 	if err != nil {
@@ -534,18 +534,18 @@ func InitDevices(config []config.VNPUConfig) []*AscendDevice {
 		commonWord := vnpu.CommonWord
 		dev := &AscendDevice{
 			config:           vnpu,
-			nodeRegisterAnno: fmt.Sprintf("%s/node-register-%s", devices.HAMiAnnotationsPrefix, commonWord),
-			useUUIDAnno:      fmt.Sprintf("%s/use-%s-uuid", devices.HAMiAnnotationsPrefix, commonWord),
-			noUseUUIDAnno:    fmt.Sprintf("%s/no-use-%s-uuid", devices.HAMiAnnotationsPrefix, commonWord),
-			handshakeAnno:    fmt.Sprintf("%s/node-handshake-%s", devices.HAMiAnnotationsPrefix, commonWord),
+			nodeRegisterAnno: fmt.Sprintf("%s/node-register-%s", HAMiAnnotationsPrefix, commonWord),
+			useUUIDAnno:      fmt.Sprintf("%s/use-%s-uuid", HAMiAnnotationsPrefix, commonWord),
+			noUseUUIDAnno:    fmt.Sprintf("%s/no-use-%s-uuid", HAMiAnnotationsPrefix, commonWord),
+			handshakeAnno:    fmt.Sprintf("%s/node-handshake-%s", HAMiAnnotationsPrefix, commonWord),
 		}
 		sort.Slice(dev.config.Templates, func(i, j int) bool {
 			return dev.config.Templates[i].Memory < dev.config.Templates[j].Memory
 		})
 		_, ok := devices.InRequestDevices[commonWord]
 		if !ok {
-			devices.InRequestDevices[commonWord] = fmt.Sprintf("%s/%s-devices-to-allocate", devices.HAMiAnnotationsPrefix, commonWord)
-			devices.SupportDevices[commonWord] = fmt.Sprintf("%s/%s-devices-allocated", devices.HAMiAnnotationsPrefix, commonWord)
+			devices.InRequestDevices[commonWord] = fmt.Sprintf("%s/%s-devices-to-allocate", HAMiAnnotationsPrefix, commonWord)
+			devices.SupportDevices[commonWord] = fmt.Sprintf("%s/%s-devices-allocated", HAMiAnnotationsPrefix, commonWord)
 			// util.HandshakeAnnos[commonWord] = dev.handshakeAnno
 		}
 		devs = append(devs, dev)
