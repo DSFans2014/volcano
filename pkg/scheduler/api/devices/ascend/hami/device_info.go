@@ -36,6 +36,15 @@ import (
 )
 
 const (
+	HAMiAnnotationsPrefix   = "hami.io"
+	AssignedNodeAnnotations = "hami.io/vgpu-node"
+	AssignedTimeAnnotations = "hami.io/vgpu-time"
+	BindTimeAnnotations     = "hami.io/bind-time"
+	DeviceBindPhase         = "hami.io/bind-phase"
+	DeviceBindAllocating    = "allocating"
+	DeviceBindFailed        = "failed"
+	DeviceBindSuccess       = "success"
+
 	Ascend910Prefix        = "Ascend910"
 	Ascend910NetworkWeight = 10
 	// binpack means the lower device memory remained after this allocation, the better
