@@ -120,6 +120,8 @@ func createPatch(pod *v1.Pod) ([]byte, error) {
 		patch = append(patch, *patchGates)
 	}
 
+	patch = append(patch, patchDeviceMutation(pod)...)
+
 	for _, resourceGroup := range config.ConfigData.ResGroupsConfig {
 		klog.V(3).Infof("resourceGroup %s", resourceGroup.ResourceGroup)
 		group := GetResGroup(resourceGroup)
@@ -259,4 +261,17 @@ func patchSchedulerName(resGroupConfig wkconfig.ResGroupConfig) *patchOperation 
 	}
 
 	return &patchOperation{Op: "add", Path: "/spec/schedulerName", Value: resGroupConfig.SchedulerName}
+}
+
+func patchDeviceMutation(pod *v1.Pod) []patchOperation {
+	var patch []patchOperation
+	for _, mutator := range registeredDeviceMutators {
+		patches := mutator.MutateAdmission(pod)
+		if len(patches) == 0 {
+			continue
+		}
+		patch = append(patch, patches...)
+
+	}
+	return patch
 }
