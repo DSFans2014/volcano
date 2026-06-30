@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"volcano.sh/volcano/pkg/scheduler/api/devices"
 	"volcano.sh/volcano/pkg/scheduler/api/devices/config"
@@ -606,6 +607,79 @@ func TestAscendDevices_AddResource(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAllocateAddsNodeLockAscendWhenEnabled(t *testing.T) {
+	prev := NodeLockEnable
+	NodeLockEnable = true
+	defer func() {
+		NodeLockEnable = prev
+	}()
+
+	nodeName := "test-node-lock-enabled"
+	client := fake.NewSimpleClientset(&v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        nodeName,
+			Annotations: map[string]string{},
+		},
+	})
+
+	ads := &AscendDevices{
+		NodeName: nodeName,
+		Type:     "Ascend910A",
+		Devices:  map[string]*AscendDevice{},
+	}
+	pod := createTestPod("allocate-node-lock", "default", map[string]string{})
+
+	err := ads.Allocate(client, pod)
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "failed to select ascend devices")
+	}
+
+	gotNode, getErr := client.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
+	assert.NoError(t, getErr)
+
+	lockValue, ok := gotNode.Annotations[NodeLockAscend]
+	assert.True(t, ok, "expected node annotation %q to be set", NodeLockAscend)
+	assert.NotEmpty(t, lockValue)
+	_, parseErr := time.Parse(time.RFC3339, lockValue)
+	assert.NoError(t, parseErr, "lock annotation should be an RFC3339 timestamp")
+}
+
+func TestAllocateUsesNodeLockAscendKey(t *testing.T) {
+	prev := NodeLockEnable
+	NodeLockEnable = true
+	defer func() {
+		NodeLockEnable = prev
+	}()
+
+	nodeName := "test-node-lock-key"
+	existingLockTime := time.Now().Format(time.RFC3339)
+	client := fake.NewSimpleClientset(&v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: nodeName,
+			Annotations: map[string]string{
+				NodeLockAscend: existingLockTime,
+			},
+		},
+	})
+
+	ads := &AscendDevices{
+		NodeName: nodeName,
+		Type:     "Ascend910A",
+		Devices:  map[string]*AscendDevice{},
+	}
+	pod := createTestPod("allocate-existing-lock", "default", map[string]string{})
+
+	err := ads.Allocate(client, pod)
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "locked for")
+	}
+
+	gotNode, getErr := client.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
+	assert.NoError(t, getErr)
+	assert.Equal(t, existingLockTime, gotNode.Annotations[NodeLockAscend])
+	assert.Len(t, gotNode.Annotations, 1, "unexpected extra lock annotations were added")
 }
 
 func createTestAscendDevices(nodeName, deviceType string, devices map[string]*AscendDevice) *AscendDevices {
